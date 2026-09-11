@@ -24,6 +24,10 @@ const _lastActiveEventTimeKey = 'active_minute_last_event_time';
 const _activeMillisKey = 'active_minute_millis_accumulator';
 const _hourlyDataKeyPrefix = 'hourly_data_';
 
+/// Beyond this, a lump step delta (app backgrounded/closed for a while) is no
+/// longer split proportionally across hours - see `_attributeDeltaToHours`.
+const _maxHourSplitGap = Duration(hours: 2);
+
 /// Tracks today's step count and active minutes from the device's
 /// step-counter sensor.
 ///
@@ -334,11 +338,22 @@ class StepTracker {
   /// happened to arrive in. Clips [from] to the start of [to]'s calendar day,
   /// so a gap spanning midnight never attributes into a different day's
   /// (already-reset) bucket map - a small accepted edge case.
+  ///
+  /// Beyond [_maxHourSplitGap], stops splitting and credits the whole delta
+  /// to [to]'s hour instead. Found via real on-device testing: every full
+  /// hour inside a gap has the same duration relative to the total gap, so a
+  /// long gap (phone idle for hours, then a short burst of walking right
+  /// before reopening) doesn't taper down like a real distribution - it
+  /// produces a flat plateau of an identical share repeated across every
+  /// full hour, fabricating hours of "steady activity" that never happened.
+  /// Past the cap there's no real basis for *where* in the gap the steps
+  /// occurred anyway, so an honest single spike at the arrival hour beats a
+  /// misleading multi-hour plateau.
   void _attributeDeltaToHours(DateTime? from, DateTime to, int delta) {
     final startOfToday = DateTime(to.year, to.month, to.day);
     var cursor = (from == null || from.isBefore(startOfToday)) ? startOfToday : from;
 
-    if (!cursor.isBefore(to)) {
+    if (!cursor.isBefore(to) || to.difference(cursor) > _maxHourSplitGap) {
       _hourlySteps[to.hour] = (_hourlySteps[to.hour] ?? 0) + delta;
       _persistHourlyData();
       return;

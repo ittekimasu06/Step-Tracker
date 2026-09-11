@@ -28,14 +28,14 @@ class NotificationSettingsWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(15), width: 1),
+        border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionLabel('NOTIFICATIONS'),
+          _sectionLabel(context, 'NOTIFICATIONS'),
           const SizedBox(height: 12),
           _ToggleRow(
             icon: Icons.notifications_active_outlined,
@@ -45,7 +45,7 @@ class NotificationSettingsWidget extends StatelessWidget {
             value: goalReminders,
             onChanged: onGoalRemindersChanged,
           ),
-          _divider(),
+          _divider(context),
           _ToggleRow(
             icon: Icons.wb_sunny_outlined,
             iconColor: AppTheme.stepsGreen,
@@ -54,7 +54,7 @@ class NotificationSettingsWidget extends StatelessWidget {
             value: morningReminder,
             onChanged: onMorningChanged,
           ),
-          _divider(),
+          _divider(context),
           _ToggleRow(
             icon: Icons.nights_stay_outlined,
             iconColor: AppTheme.activeBlue,
@@ -63,7 +63,7 @@ class NotificationSettingsWidget extends StatelessWidget {
             value: eveningReminder,
             onChanged: onEveningChanged,
           ),
-          _divider(),
+          _divider(context),
           _ToggleRow(
             icon: Icons.vibration_rounded,
             iconColor: AppTheme.caloriesPurple,
@@ -77,21 +77,21 @@ class NotificationSettingsWidget extends StatelessWidget {
     );
   }
 
-  Widget _divider() {
+  Widget _divider(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Divider(height: 1, color: Colors.white.withAlpha(13)),
+      child: Divider(height: 1, color: AppTheme.overlay(context, 13)),
     );
   }
 
-  Widget _sectionLabel(String label) {
+  Widget _sectionLabel(BuildContext context, String label) {
     return Text(
       label,
-      style: const TextStyle(
+      style: TextStyle(
         fontFamily: 'Manrope',
         fontSize: 11,
         fontWeight: FontWeight.w600,
-        color: Color(0xFF888888),
+        color: AppTheme.textSecondary(context),
         letterSpacing: 1.2,
       ),
     );
@@ -137,19 +137,19 @@ class _ToggleRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFFE6E6E6),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 Text(
                   subtitle,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 11,
-                    color: Color(0xFF888888),
+                    color: AppTheme.textSecondary(context),
                   ),
                 ),
               ],

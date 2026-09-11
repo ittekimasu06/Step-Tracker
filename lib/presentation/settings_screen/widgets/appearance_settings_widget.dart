@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 
-class UnitsSettingsWidget extends StatelessWidget {
-  final bool useMetric;
-  final ValueChanged<bool> onUnitChanged;
+class AppearanceSettingsWidget extends StatelessWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
-  const UnitsSettingsWidget({
-    required this.useMetric,
-    required this.onUnitChanged,
+  const AppearanceSettingsWidget({
+    required this.themeMode,
+    required this.onThemeModeChanged,
     super.key,
   });
 
@@ -24,7 +24,7 @@ class UnitsSettingsWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'UNITS',
+            'APPEARANCE',
             style: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 12,
@@ -36,18 +36,25 @@ class UnitsSettingsWidget extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _UnitToggleButton(
-                label: 'Metric',
-                sublabel: 'km, kg, cm',
-                isSelected: useMetric,
-                onTap: () => onUnitChanged(true),
+              _ThemeModeToggleButton(
+                label: 'System',
+                sublabel: 'Match device',
+                isSelected: themeMode == ThemeMode.system,
+                onTap: () => onThemeModeChanged(ThemeMode.system),
               ),
               const SizedBox(width: 8),
-              _UnitToggleButton(
-                label: 'Imperial',
-                sublabel: 'mi, lb, ft',
-                isSelected: !useMetric,
-                onTap: () => onUnitChanged(false),
+              _ThemeModeToggleButton(
+                label: 'Light',
+                sublabel: 'Always light',
+                isSelected: themeMode == ThemeMode.light,
+                onTap: () => onThemeModeChanged(ThemeMode.light),
+              ),
+              const SizedBox(width: 8),
+              _ThemeModeToggleButton(
+                label: 'Dark',
+                sublabel: 'Always dark',
+                isSelected: themeMode == ThemeMode.dark,
+                onTap: () => onThemeModeChanged(ThemeMode.dark),
               ),
             ],
           ),
@@ -57,13 +64,13 @@ class UnitsSettingsWidget extends StatelessWidget {
   }
 }
 
-class _UnitToggleButton extends StatelessWidget {
+class _ThemeModeToggleButton extends StatelessWidget {
   final String label;
   final String sublabel;
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _UnitToggleButton({
+  const _ThemeModeToggleButton({
     required this.label,
     required this.sublabel,
     required this.isSelected,

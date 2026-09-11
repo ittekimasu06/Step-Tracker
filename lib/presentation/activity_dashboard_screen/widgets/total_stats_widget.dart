@@ -18,9 +18,9 @@ class TotalStatsWidget extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceDark,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withAlpha(15), width: 1),
+          border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
         ),
         child: Column(
           children: [
@@ -31,12 +31,12 @@ class TotalStatsWidget extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Divider(height: 1, color: Colors.white.withAlpha(15)),
+              child: Divider(height: 1, color: AppTheme.overlay(context, 15)),
             ),
             _StatRow(
               label: 'Distance during activity',
               value: '${distanceKm.toStringAsFixed(2)} km',
-              valueColor: const Color(0xFFE6E6E6),
+              valueColor: Theme.of(context).colorScheme.onSurface,
             ),
           ],
         ),
@@ -63,10 +63,10 @@ class _StatRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 13,
-              color: Color(0xFFAAAAAA),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ),

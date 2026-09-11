@@ -49,9 +49,9 @@ class _ActivityRingWidgetState extends State<ActivityRingWidget>
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withAlpha(15), width: 1),
+        border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
       ),
       child: AnimatedBuilder(
         animation: _animation,

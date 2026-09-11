@@ -28,19 +28,19 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
           height: preferredSize.height + MediaQuery.of(context).padding.top,
           padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
           decoration: BoxDecoration(
-            color: AppTheme.backgroundDark.withAlpha(217),
+            color: Theme.of(context).scaffoldBackgroundColor.withAlpha(217),
             border: Border(
-              bottom: BorderSide(color: Colors.white.withAlpha(15), width: 1),
+              bottom: BorderSide(color: AppTheme.overlay(context, 15), width: 1),
             ),
           ),
           child: Row(
             children: [
               if (showBackButton)
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.arrow_back_ios_new_rounded,
                     size: 20,
-                    color: Color(0xFFE6E6E6),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                   onPressed: () => Navigator.of(context).pop(),
                 )
@@ -51,11 +51,11 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFFE6E6E6),
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ),

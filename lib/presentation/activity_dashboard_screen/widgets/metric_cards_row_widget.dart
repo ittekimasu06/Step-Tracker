@@ -105,7 +105,7 @@ class _MetricCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withAlpha(64), width: 1),
       ),
@@ -148,10 +148,10 @@ class _MetricCard extends StatelessWidget {
                 const SizedBox(width: 2),
                 Text(
                   unit,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 11,
-                    color: Color(0xFF888888),
+                    color: AppTheme.textSecondary(context),
                   ),
                 ),
               ],
@@ -159,10 +159,10 @@ class _MetricCard extends StatelessWidget {
           ),
           Text(
             goal,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 11,
-              color: Color(0xFF888888),
+              color: AppTheme.textSecondary(context),
             ),
           ),
           const SizedBox(height: 8),

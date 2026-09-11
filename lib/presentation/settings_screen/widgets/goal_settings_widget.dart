@@ -24,20 +24,20 @@ class GoalSettingsWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(15), width: 1),
+        border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'DAILY GOALS',
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF888888),
+              color: AppTheme.textSecondary(context),
               letterSpacing: 1.2,
             ),
           ),
@@ -123,11 +123,11 @@ class _GoalSliderRow extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFFCCCCCC),
+                color: AppTheme.textBright(context),
               ),
             ),
             Row(
@@ -145,10 +145,10 @@ class _GoalSliderRow extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   unit,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 11,
-                    color: Color(0xFF888888),
+                    color: AppTheme.textSecondary(context),
                   ),
                 ),
               ],
@@ -179,18 +179,18 @@ class _GoalSliderRow extends StatelessWidget {
           children: [
             Text(
               '${min.toInt()}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 10,
-                color: Color(0xFF666666),
+                color: AppTheme.textMuted(context),
               ),
             ),
             Text(
               '${max.toInt()}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 10,
-                color: Color(0xFF666666),
+                color: AppTheme.textMuted(context),
               ),
             ),
           ],

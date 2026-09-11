@@ -36,10 +36,16 @@ class _AppNavigationState extends State<AppNavigation> {
       branchIndex: 0,
     ),
     _TabSpec(
+      label: 'Consultant',
+      icon: Icons.auto_awesome_outlined,
+      selectedIcon: Icons.auto_awesome,
+      branchIndex: 1,
+    ),
+    _TabSpec(
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      branchIndex: 1,
+      branchIndex: 2,
     ),
   ];
 
@@ -63,9 +69,9 @@ class _AppNavigationState extends State<AppNavigation> {
           child: Container(
             height: 64,
             decoration: BoxDecoration(
-              color: AppTheme.surfaceDark.withAlpha(191),
+              color: Theme.of(context).colorScheme.surface.withAlpha(191),
               borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: Colors.white.withAlpha(20), width: 1),
+              border: Border.all(color: AppTheme.overlay(context, 20), width: 1),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -108,7 +114,7 @@ class _AppNavigationState extends State<AppNavigation> {
                             isActive ? tab.selectedIcon : tab.icon,
                             color: isActive
                                 ? AppTheme.stepsGreen
-                                : const Color(0xFF888888),
+                                : AppTheme.textSecondary(context),
                             size: 22,
                           ),
                           AnimatedSize(

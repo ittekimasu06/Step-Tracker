@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../presentation/activity_dashboard_screen/activity_dashboard_screen.dart';
+import '../presentation/consultant_screen/consultant_screen.dart';
 import '../presentation/settings_screen/settings_screen.dart';
 import '../presentation/auth/login_screen.dart';
 import '../presentation/auth/register_screen.dart';
@@ -14,6 +15,7 @@ class AppRoutes {
   static const String registerScreen = '/register';
   static const String profileSetupScreen = '/profile-setup';
   static const String activityDashboardScreen = '/activity-dashboard-screen';
+  static const String consultantScreen = '/consultant-screen';
   static const String settingsScreen = '/settings-screen';
 }
 
@@ -61,6 +63,14 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
               GoRoute(
                 path: AppRoutes.activityDashboardScreen,
                 builder: (context, state) => const ActivityDashboardScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.consultantScreen,
+                builder: (context, state) => const ConsultantScreen(),
               ),
             ],
           ),

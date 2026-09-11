@@ -325,7 +325,6 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
         _isToday(_selectedDate) && _stepTracker.permissionDenied;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -357,18 +356,18 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.pan_tool_outlined,
                           size: 64,
-                          color: Color(0xFF444444),
+                          color: AppTheme.textDisabled(context),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           'Step tracking permission needed',
                           style: TextStyle(
                             fontFamily: 'Manrope',
                             fontSize: 16,
-                            color: Color(0xFF888888),
+                            color: AppTheme.textSecondary(context),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -377,7 +376,7 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                           style: TextStyle(
                             fontFamily: 'Manrope',
                             fontSize: 13,
-                            color: const Color(0xFF888888).withAlpha(179),
+                            color: AppTheme.textSecondary(context).withAlpha(179),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -416,10 +415,10 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppTheme.surfaceDark,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: Colors.white.withAlpha(15),
+                            color: AppTheme.overlay(context, 15),
                             width: 1,
                           ),
                         ),
@@ -427,10 +426,10 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                           'Hourly breakdown is only available for the last '
                           '$kHourlyRetentionDays days',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Manrope',
                             fontSize: 13,
-                            color: Color(0xFF888888),
+                            color: AppTheme.textSecondary(context),
                           ),
                         ),
                       ),
@@ -498,12 +497,12 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                 // still in flight - _buildDayData always returns a real
                 // (possibly zero-valued) entry once resolved, so null here
                 // never means "confirmed no activity", just "not yet known".
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(
+                        const SizedBox(
                           width: 28,
                           height: 28,
                           child: CircularProgressIndicator(
@@ -511,13 +510,13 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                             color: AppTheme.stepsGreen,
                           ),
                         ),
-                        SizedBox(height: 16),
+                        const SizedBox(height: 16),
                         Text(
                           'Loading activity...',
                           style: TextStyle(
                             fontFamily: 'Manrope',
                             fontSize: 14,
-                            color: Color(0xFF888888),
+                            color: AppTheme.textSecondary(context),
                           ),
                         ),
                       ],
@@ -537,29 +536,29 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
       child: Row(
         children: [
-          const Text(
+          Text(
             'Daily Activity',
             style: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              color: Color(0xFFE6E6E6),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const Spacer(),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.calendar_month_outlined,
               size: 22,
-              color: Color(0xFFCCCCCC),
+              color: AppTheme.textBright(context),
             ),
             onPressed: () => _pickDate(context),
           ),
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.settings_outlined,
               size: 22,
-              color: Color(0xFFCCCCCC),
+              color: AppTheme.textBright(context),
             ),
             onPressed: () => context.go(AppRoutes.settingsScreen),
           ),

@@ -54,7 +54,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -105,7 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: GoogleFonts.manrope(
             fontSize: 28,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFFE6E6E6),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -113,7 +112,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Start tracking your daily activity',
           style: GoogleFonts.manrope(
             fontSize: 14,
-            color: const Color(0xFF888888),
+            color: AppTheme.textSecondary(context),
           ),
         ),
       ],
@@ -147,7 +146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _obscurePassword
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: const Color(0xFF666666),
+                color: AppTheme.textMuted(context),
                 size: 20,
               ),
               onPressed: () =>
@@ -170,7 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _obscureConfirm
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
-                color: const Color(0xFF666666),
+                color: AppTheme.textMuted(context),
                 size: 20,
               ),
               onPressed: () =>
@@ -206,7 +205,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: GoogleFonts.manrope(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFFAAAAAA),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 8),
@@ -216,28 +215,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
           obscureText: obscureText,
           style: GoogleFonts.manrope(
             fontSize: 15,
-            color: const Color(0xFFE6E6E6),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: GoogleFonts.manrope(
               fontSize: 15,
-              color: const Color(0xFF444444),
+              color: AppTheme.textDisabled(context),
             ),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: AppTheme.surfaceDark,
+            fillColor: Theme.of(context).colorScheme.surface,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 14,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -248,18 +251,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFCF6679)),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFCF6679),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.error,
                 width: 1.5,
               ),
             ),
             errorStyle: GoogleFonts.manrope(
               fontSize: 12,
-              color: const Color(0xFFCF6679),
+              color: Theme.of(context).colorScheme.error,
             ),
           ),
           validator: validator,
@@ -269,24 +272,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildError(String message) {
+    final error = Theme.of(context).colorScheme.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFCF6679).withAlpha(25),
+        color: error.withAlpha(25),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFCF6679).withAlpha(80)),
+        border: Border.all(color: error.withAlpha(80)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFFCF6679), size: 18),
+          Icon(Icons.error_outline, color: error, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: GoogleFonts.manrope(
-                fontSize: 13,
-                color: const Color(0xFFCF6679),
-              ),
+              style: GoogleFonts.manrope(fontSize: 13, color: error),
             ),
           ),
         ],
@@ -332,18 +333,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildDivider() {
     return Row(
       children: [
-        const Expanded(child: Divider(color: Color(0xFF2A2A2A))),
+        const Expanded(child: Divider()),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'or continue with',
             style: GoogleFonts.manrope(
               fontSize: 12,
-              color: const Color(0xFF666666),
+              color: AppTheme.textMuted(context),
             ),
           ),
         ),
-        const Expanded(child: Divider(color: Color(0xFF2A2A2A))),
+        const Expanded(child: Divider()),
       ],
     );
   }
@@ -355,12 +356,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: OutlinedButton(
         onPressed: auth.isLoading ? null : _signInWithGoogle,
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFE6E6E6),
-          side: const BorderSide(color: Color(0xFF2A2A2A)),
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          backgroundColor: AppTheme.surfaceDark,
+          backgroundColor: Theme.of(context).colorScheme.surface,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -394,7 +395,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Already have an account? ',
           style: GoogleFonts.manrope(
             fontSize: 14,
-            color: const Color(0xFF888888),
+            color: AppTheme.textSecondary(context),
           ),
         ),
         GestureDetector(

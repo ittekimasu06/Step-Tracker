@@ -80,7 +80,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -128,7 +127,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           style: GoogleFonts.manrope(
             fontSize: 28,
             fontWeight: FontWeight.w700,
-            color: const Color(0xFFE6E6E6),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -136,7 +135,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           'Help us personalise your fitness experience',
           style: GoogleFonts.manrope(
             fontSize: 14,
-            color: const Color(0xFF888888),
+            color: AppTheme.textSecondary(context),
           ),
         ),
       ],
@@ -240,7 +239,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           style: GoogleFonts.manrope(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFFAAAAAA),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 8),
@@ -249,32 +248,36 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           keyboardType: keyboardType,
           style: GoogleFonts.manrope(
             fontSize: 15,
-            color: const Color(0xFFE6E6E6),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: GoogleFonts.manrope(
               fontSize: 15,
-              color: const Color(0xFF444444),
+              color: AppTheme.textDisabled(context),
             ),
             suffixText: suffix,
             suffixStyle: GoogleFonts.manrope(
               fontSize: 13,
-              color: const Color(0xFF666666),
+              color: AppTheme.textMuted(context),
             ),
             filled: true,
-            fillColor: AppTheme.surfaceDark,
+            fillColor: Theme.of(context).colorScheme.surface,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 14,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF2A2A2A)),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -285,12 +288,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFCF6679)),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFFCF6679),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.error,
                 width: 1.5,
               ),
             ),
@@ -310,7 +313,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           style: GoogleFonts.manrope(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: const Color(0xFFAAAAAA),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 8),
@@ -330,12 +333,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 decoration: BoxDecoration(
                   color: selected
                       ? AppTheme.stepsGreen.withAlpha(30)
-                      : AppTheme.surfaceDark,
+                      : Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: selected
                         ? AppTheme.stepsGreen
-                        : const Color(0xFF2A2A2A),
+                        : Theme.of(context).colorScheme.outlineVariant,
                     width: selected ? 1.5 : 1,
                   ),
                 ),
@@ -346,7 +349,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     fontWeight: FontWeight.w500,
                     color: selected
                         ? AppTheme.stepsGreen
-                        : const Color(0xFF888888),
+                        : AppTheme.textSecondary(context),
                   ),
                 ),
               ),
@@ -358,28 +361,26 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   }
 
   Widget _buildError(String message) {
+    final error = Theme.of(context).colorScheme.error;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFCF6679).withAlpha(20),
+        color: error.withAlpha(20),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFCF6679).withAlpha(80)),
+        border: Border.all(color: error.withAlpha(80)),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline_rounded,
-            color: Color(0xFFCF6679),
+            color: error,
             size: 16,
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: GoogleFonts.manrope(
-                fontSize: 13,
-                color: const Color(0xFFCF6679),
-              ),
+              style: GoogleFonts.manrope(fontSize: 13, color: error),
             ),
           ),
         ],
@@ -432,7 +433,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
           'Skip for now',
           style: GoogleFonts.manrope(
             fontSize: 14,
-            color: const Color(0xFF666666),
+            color: AppTheme.textMuted(context),
           ),
         ),
       ),

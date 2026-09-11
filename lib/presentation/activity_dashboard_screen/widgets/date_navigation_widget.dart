@@ -47,15 +47,15 @@ class DateNavigationWidget extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.surfaceVariantDark,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(24),
         ),
         child: Row(
           children: [
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.chevron_left_rounded,
-                color: Color(0xFFCCCCCC),
+                color: AppTheme.textBright(context),
                 size: 24,
               ),
               onPressed: onPrevious,
@@ -67,11 +67,11 @@ class DateNavigationWidget extends StatelessWidget {
                   children: [
                     Text(
                       _formatDate(selectedDate),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Manrope',
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFFE6E6E6),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     if (_isToday) ...[
@@ -104,8 +104,8 @@ class DateNavigationWidget extends StatelessWidget {
               icon: Icon(
                 Icons.chevron_right_rounded,
                 color: _isToday
-                    ? const Color(0xFF444444)
-                    : const Color(0xFFCCCCCC),
+                    ? AppTheme.textDisabled(context)
+                    : AppTheme.textBright(context),
                 size: 24,
               ),
               onPressed: _isToday ? null : onNext,

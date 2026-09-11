@@ -6,14 +6,18 @@ import 'package:provider/provider.dart';
 import '../core/app_export.dart';
 import '../widgets/custom_error_widget.dart';
 import './providers/auth_provider.dart';
+import './providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final authProvider = AuthProvider();
-  // Restore any previously stored session before the first frame, so the
-  // router's initial redirect decision is already correct.
-  await authProvider.initialize();
+  final themeProvider = ThemeProvider();
+  // Restore any previously stored session/theme before the first frame, so
+  // the router's initial redirect and the active theme are already correct.
+  // Independent I/O (secure storage vs. SharedPreferences), so run them
+  // together rather than sequentially.
+  await Future.wait([authProvider.initialize(), themeProvider.initialize()]);
   final router = buildAppRouter(authProvider);
 
   bool hasShownError = false;
@@ -38,27 +42,47 @@ void main() async {
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
   ]).then((value) {
     GoRouter.optionURLReflectsImperativeAPIs = true;
-    runApp(MyApp(authProvider: authProvider, router: router));
+    runApp(
+      MyApp(
+        authProvider: authProvider,
+        themeProvider: themeProvider,
+        router: router,
+      ),
+    );
   });
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({required this.authProvider, required this.router, super.key});
+  const MyApp({
+    required this.authProvider,
+    required this.themeProvider,
+    required this.router,
+    super.key,
+  });
 
   final AuthProvider authProvider;
+  final ThemeProvider themeProvider;
   final GoRouter router;
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-        value: authProvider,
+    return MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: authProvider),
+          ChangeNotifierProvider.value(value: themeProvider),
+        ],
         child: Sizer(
           builder: (context, orientation, screenType) {
+            // This `context` is a descendant of the MultiProvider above -
+            // the outer MyApp.build `context` parameter is NOT, and reading
+            // ThemeProvider with that one instead would throw
+            // ProviderNotFoundException at runtime.
+            final themeMode = context.watch<ThemeProvider>().themeMode;
             return MaterialApp.router(
               title: 'steptrack',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
-              themeMode: ThemeMode.light,
+              themeMode: themeMode,
 
               builder: (context, child) {
                 return MediaQuery(

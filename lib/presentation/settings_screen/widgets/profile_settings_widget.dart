@@ -69,14 +69,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(15), width: 1),
+        border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionLabel('PROFILE'),
+          _sectionLabel(context, 'PROFILE'),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -166,14 +166,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   }
 }
 
-Widget _sectionLabel(String text) {
+Widget _sectionLabel(BuildContext context, String text) {
   return Text(
     text,
-    style: const TextStyle(
+    style: TextStyle(
       fontFamily: 'Manrope',
       fontSize: 11,
       fontWeight: FontWeight.w700,
-      color: Color(0xFF888888),
+      color: AppTheme.textSecondary(context),
       letterSpacing: 1.2,
     ),
   );
@@ -208,13 +208,13 @@ class _GlassTextFieldState extends State<_GlassTextField> {
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: _focused
-            ? Colors.white.withAlpha(20)
-            : Colors.white.withAlpha(10),
+            ? AppTheme.overlay(context, 20)
+            : AppTheme.overlay(context, 10),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _focused
               ? AppTheme.stepsGreen.withAlpha(128)
-              : Colors.white.withAlpha(20),
+              : AppTheme.overlay(context, 20),
           width: 1,
         ),
       ),
@@ -224,24 +224,26 @@ class _GlassTextFieldState extends State<_GlassTextField> {
           controller: widget.controller,
           keyboardType: widget.keyboardType,
           onChanged: widget.onChanged,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Manrope',
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: Color(0xFFE6E6E6),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
           decoration: InputDecoration(
             labelText: widget.label,
             labelStyle: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 12,
-              color: _focused ? AppTheme.stepsGreen : const Color(0xFF888888),
+              color: _focused
+                  ? AppTheme.stepsGreen
+                  : AppTheme.textSecondary(context),
             ),
             suffixText: widget.suffix,
-            suffixStyle: const TextStyle(
+            suffixStyle: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 12,
-              color: Color(0xFF888888),
+              color: AppTheme.textSecondary(context),
             ),
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(

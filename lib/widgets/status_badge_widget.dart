@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 enum ActivityStatus { onTrack, goalReached, belowGoal }
 
 class StatusBadgeWidget extends StatelessWidget {
@@ -10,9 +12,9 @@ class StatusBadgeWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      ActivityStatus.goalReached => ('Goal Reached', const Color(0xFF4CAF50)),
-      ActivityStatus.onTrack => ('On Track', const Color(0xFF2196F3)),
-      ActivityStatus.belowGoal => ('Below Goal', const Color(0xFF888888)),
+      ActivityStatus.goalReached => ('Goal Reached', AppTheme.stepsGreen),
+      ActivityStatus.onTrack => ('On Track', AppTheme.activeBlue),
+      ActivityStatus.belowGoal => ('Below Goal', AppTheme.textSecondary(context)),
     };
 
     return Container(

@@ -63,37 +63,37 @@ class _HourlyChartSectionWidgetState extends State<HourlyChartSectionWidget>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withAlpha(15), width: 1),
+        border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             widget.label,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Manrope',
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: Color(0xFFE6E6E6),
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.access_time_rounded,
                 size: 12,
-                color: Color(0xFF888888),
+                color: AppTheme.textSecondary(context),
               ),
               const SizedBox(width: 4),
               Text(
                 'Most active: ${widget.peakTimeLabel}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Manrope',
                   fontSize: 11,
-                  color: Color(0xFF888888),
+                  color: AppTheme.textSecondary(context),
                 ),
               ),
             ],
@@ -112,7 +112,8 @@ class _HourlyChartSectionWidgetState extends State<HourlyChartSectionWidget>
                     barTouchData: BarTouchData(
                       touchTooltipData: BarTouchTooltipData(
                         tooltipRoundedRadius: 8,
-                        tooltipBgColor: AppTheme.surfaceVariantDark,
+                        tooltipBgColor:
+                            Theme.of(context).colorScheme.surfaceContainerHighest,
                         getTooltipItem: (group, groupIndex, rod, rodIndex) {
                           final val =
                               (widget.hourlyData[group.x][widget.dataKey]
@@ -152,10 +153,10 @@ class _HourlyChartSectionWidgetState extends State<HourlyChartSectionWidget>
                             if (h == 0 || h == 6 || h == 12 || h == 18) {
                               return Text(
                                 '$h',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Manrope',
                                   fontSize: 10,
-                                  color: Color(0xFF666666),
+                                  color: AppTheme.textMuted(context),
                                 ),
                               );
                             }
@@ -169,7 +170,7 @@ class _HourlyChartSectionWidgetState extends State<HourlyChartSectionWidget>
                       drawVerticalLine: false,
                       horizontalInterval: maxVal / 2,
                       getDrawingHorizontalLine: (_) => FlLine(
-                        color: Colors.white.withAlpha(13),
+                        color: AppTheme.overlay(context, 13),
                         strokeWidth: 1,
                         dashArray: [4, 4],
                       ),
@@ -209,20 +210,20 @@ class _HourlyChartSectionWidgetState extends State<HourlyChartSectionWidget>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 '0',
                 style: TextStyle(
                   fontFamily: 'Manrope',
                   fontSize: 10,
-                  color: Color(0xFF666666),
+                  color: AppTheme.textMuted(context),
                 ),
               ),
               Text(
                 '(hrs)',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Manrope',
                   fontSize: 10,
-                  color: Color(0xFF666666),
+                  color: AppTheme.textMuted(context),
                 ),
               ),
             ],

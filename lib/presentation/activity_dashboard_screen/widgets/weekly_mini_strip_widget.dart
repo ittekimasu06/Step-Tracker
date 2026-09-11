@@ -64,7 +64,7 @@ class WeeklyMiniStripWidget extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     color: isToday
                         ? AppTheme.stepsGreen
-                        : const Color(0xFF888888),
+                        : AppTheme.textSecondary(context),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -106,12 +106,17 @@ class _MiniRingWidget extends StatelessWidget {
         ),
       ),
       child: CustomPaint(
-        painter: _MiniRingPainter(progress: progress),
+        painter: _MiniRingPainter(
+          progress: progress,
+          trackColor: Theme.of(context).colorScheme.outlineVariant,
+        ),
         child: Center(
           child: Icon(
             Icons.directions_walk_rounded,
             size: 14,
-            color: progress > 0 ? AppTheme.stepsGreen : const Color(0xFF444444),
+            color: progress > 0
+                ? AppTheme.stepsGreen
+                : AppTheme.textDisabled(context),
           ),
         ),
       ),
@@ -121,16 +126,16 @@ class _MiniRingWidget extends StatelessWidget {
 
 class _MiniRingPainter extends CustomPainter {
   final double progress;
-  const _MiniRingPainter({required this.progress});
+  final Color trackColor;
+  const _MiniRingPainter({required this.progress, required this.trackColor});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 - 3;
 
-    // Track
     final trackPaint = Paint()
-      ..color = const Color(0xFF2A2A2A)
+      ..color = trackColor
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -155,5 +160,6 @@ class _MiniRingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MiniRingPainter old) => old.progress != progress;
+  bool shouldRepaint(_MiniRingPainter old) =>
+      old.progress != progress || old.trackColor != trackColor;
 }
