@@ -1,5 +1,6 @@
 -- Mirrors the production PostgreSQL schema so Hibernate's `validate` catches any
 -- drift between the JPA entities and the real database.
+DROP TABLE IF EXISTS friendships;
 DROP TABLE IF EXISTS hourly_steps;
 DROP TABLE IF EXISTS daily_steps;
 DROP TABLE IF EXISTS user_profiles;
@@ -50,3 +51,16 @@ CREATE TABLE hourly_steps (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT uq_hourly_steps_user_date_hour UNIQUE (user_id, step_date, hour_of_day)
 );
+
+CREATE TABLE friendships (
+  id UUID PRIMARY KEY,
+  requester_id UUID NOT NULL REFERENCES users(id),
+  addressee_id UUID NOT NULL REFERENCES users(id),
+  status VARCHAR(20) NOT NULL CHECK (status IN ('PENDING', 'ACCEPTED')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_friendship_pair UNIQUE (requester_id, addressee_id)
+);
+
+CREATE INDEX idx_friendship_requester ON friendships(requester_id);
+CREATE INDEX idx_friendship_addressee ON friendships(addressee_id);

@@ -42,10 +42,16 @@ class _AppNavigationState extends State<AppNavigation> {
       branchIndex: 1,
     ),
     _TabSpec(
+      label: 'Friends',
+      icon: Icons.people_outline,
+      selectedIcon: Icons.people,
+      branchIndex: 2,
+    ),
+    _TabSpec(
       label: 'Settings',
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      branchIndex: 2,
+      branchIndex: 3,
     ),
   ];
 

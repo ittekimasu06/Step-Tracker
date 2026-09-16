@@ -123,18 +123,55 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
 
   /// Builds the display map every date (today or otherwise) is rendered
   /// from. Calories/distance are always derived client-side from steps plus
-  /// [_profile]'s weight/height (see [ActivityEstimator]), and goals always
-  /// come from the current profile - there's no per-day historical goal, so
-  /// a past day is shown against today's goals, same as "today" itself.
+  /// [_profile]'s weight/height/age/gender (see [ActivityEstimator]), and
+  /// goals always come from the current profile - there's no per-day
+  /// historical goal, so a past day is shown against today's goals, same as
+  /// "today" itself.
+  ///
+  /// `totalCalories` = activity calories (extra burn from walking) + resting
+  /// calories (BMR - what the body burns just to function, which is most of
+  /// a day's real total). [isToday] controls how much of the day's BMR to
+  /// count: a completed past day gets its full 24h of resting burn, while
+  /// today only counts the fraction of the day elapsed so far, so the number
+  /// doesn't include calories that haven't been burned yet.
+  ///
+  /// Activity calories are computed via [ActivityEstimator.activityCalories]
+  /// (MET-based, varies by implied walking speed) rather than a flat
+  /// per-step constant. When [hourlySteps]/[hourlyActiveMinutes] are both
+  /// provided (today only - see call sites), the day total is the *sum* of
+  /// that formula applied per-hour rather than once on the whole day's
+  /// totals - calling it once on a whole day mixes scattered/incidental
+  /// steps into the cadence for an unrelated sustained bout and can
+  /// meaningfully overestimate (see [ActivityEstimator.activityCalories]'s
+  /// doc). Past days fall back to the single whole-day call since their
+  /// hourly detail is fetched separately and may not be available yet - a
+  /// known, accepted minor approximation for those, not today.
   Map<String, dynamic> _buildDayData({
     required String dateKey,
     required int steps,
     required int activeMinutes,
+    required bool isToday,
+    Map<int, int>? hourlySteps,
+    Map<int, int>? hourlyActiveMinutes,
   }) {
-    final activityCalories = ActivityEstimator.calories(
-      steps,
-      _profile?.weightKg,
-    ).round();
+    final activityCalories = (hourlySteps != null && hourlyActiveMinutes != null)
+        ? _sumHourlyActivityCalories(hourlySteps, hourlyActiveMinutes)
+        : ActivityEstimator.activityCalories(
+            steps: steps,
+            activeMinutes: activeMinutes,
+            weightKg: _profile?.weightKg,
+            heightCm: _profile?.heightCm,
+          ).round();
+    final fullDayBmr = ActivityEstimator.bmr(
+      weightKg: _profile?.weightKg,
+      heightCm: _profile?.heightCm,
+      age: _profile?.age,
+      gender: _profile?.gender,
+    );
+    final elapsedFraction =
+        isToday ? ActivityEstimator.elapsedDayFraction(DateTime.now()) : 1.0;
+    final restingCalories =
+        ActivityEstimator.restingCalories(fullDayBmr, elapsedFraction).round();
     return {
       'date': dateKey,
       'steps': steps,
@@ -143,9 +180,29 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
       'activeGoal': _profile?.activeMinutesGoal ?? kDefaultActiveMinutesGoal,
       'activityCalories': activityCalories,
       'calorieGoal': _profile?.calorieGoal ?? kDefaultCalorieGoal,
-      'totalCalories': activityCalories,
+      'totalCalories': activityCalories + restingCalories,
       'distanceKm': ActivityEstimator.distanceKm(steps, _profile?.heightCm),
     };
+  }
+
+  /// Sums [ActivityEstimator.activityCalories] per-hour across every hour
+  /// present in either map, rather than calling it once on whole-day totals
+  /// - see [_buildDayData]'s doc for why.
+  int _sumHourlyActivityCalories(
+    Map<int, int> steps,
+    Map<int, int> activeMinutes,
+  ) {
+    var total = 0.0;
+    final hours = <int>{...steps.keys, ...activeMinutes.keys};
+    for (final h in hours) {
+      total += ActivityEstimator.activityCalories(
+        steps: steps[h] ?? 0,
+        activeMinutes: activeMinutes[h] ?? 0,
+        weightKg: _profile?.weightKg,
+        heightCm: _profile?.heightCm,
+      );
+    }
+    return total.round();
   }
 
   /// Fetches and caches a non-today date's real entry from the backend, if
@@ -163,6 +220,7 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
         dateKey: dateStr,
         steps: entry?.stepCount ?? 0,
         activeMinutes: entry?.activeMinutes ?? 0,
+        isToday: false,
       );
     });
   }
@@ -179,6 +237,9 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
         dateKey: 'today',
         steps: _todaySteps ?? 0,
         activeMinutes: _todayActiveMinutes ?? 0,
+        isToday: true,
+        hourlySteps: _stepTracker.hourlyStepsToday,
+        hourlyActiveMinutes: _stepTracker.hourlyActiveMinutesToday,
       );
     }
 
@@ -197,8 +258,11 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     final now = DateTime.now();
     final todayEntry = _buildDayData(
       dateKey: _formatDate(now),
+      isToday: true,
       steps: _todaySteps ?? 0,
       activeMinutes: _todayActiveMinutes ?? 0,
+      hourlySteps: _stepTracker.hourlyStepsToday,
+      hourlyActiveMinutes: _stepTracker.hourlyActiveMinutesToday,
     );
     return [todayEntry, ..._fetchedDayData.values];
   }
@@ -222,11 +286,17 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
   ) {
     return List.generate(24, (h) {
       final s = steps[h] ?? 0;
+      final a = activeMinutes[h] ?? 0;
       return {
         'hour': h,
         'steps': s,
-        'activeMin': activeMinutes[h] ?? 0,
-        'calories': ActivityEstimator.calories(s, _profile?.weightKg).round(),
+        'activeMin': a,
+        'calories': ActivityEstimator.activityCalories(
+          steps: s,
+          activeMinutes: a,
+          weightKg: _profile?.weightKg,
+          heightCm: _profile?.heightCm,
+        ).round(),
       };
     });
   }
@@ -304,6 +374,30 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
       initialDate: _selectedDate,
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now,
+      // Bolds the "Select date" header and the Cancel/OK buttons, which the
+      // default Material date picker theme renders in a regular weight.
+      builder: (context, child) {
+        final base = Theme.of(context);
+        return Theme(
+          data: base.copyWith(
+            datePickerTheme: base.datePickerTheme.copyWith(
+              headerHelpStyle: const TextStyle(
+                fontFamily: 'Manrope',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                textStyle: const TextStyle(
+                  fontFamily: 'Manrope',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && mounted) {
       setState(() => _selectedDate = picked);

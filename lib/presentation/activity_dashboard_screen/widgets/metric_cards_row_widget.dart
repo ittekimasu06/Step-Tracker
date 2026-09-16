@@ -27,7 +27,7 @@ class MetricCardsRowWidget extends StatelessWidget {
       _MetricCard(
         label: 'Steps',
         value: _formatNumber(steps),
-        goal: '/$stepGoal',
+        goal: '/${_formatNumber(stepGoal)}',
         color: AppTheme.stepsGreen,
         progress: (steps / stepGoal).clamp(0.0, 1.0),
         unit: '',
@@ -75,11 +75,16 @@ class MetricCardsRowWidget extends StatelessWidget {
     );
   }
 
+  /// Full exact value with thousands separators (e.g. "12,345"), not an
+  /// abbreviated "12.3k" form.
   String _formatNumber(int n) {
-    if (n >= 1000) {
-      return '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k';
+    final digits = n.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(digits[i]);
     }
-    return n.toString();
+    return buffer.toString();
   }
 }
 
