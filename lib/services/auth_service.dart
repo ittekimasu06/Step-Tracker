@@ -32,12 +32,14 @@ class AuthService {
 
   Future<String> registerWithEmail({
     required String email,
+    required String username,
     required String password,
   }) async {
     final data = await _api.post(
       '/auth/register',
       data: {
         'email': email,
+        'username': username,
         'password': password,
         'passwordConfirm': password,
       },

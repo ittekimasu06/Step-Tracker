@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/profile_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService.instance;
@@ -10,8 +11,16 @@ class AuthProvider extends ChangeNotifier {
   bool _isInitialized = false;
   bool _isLoading = false;
   String? _errorMessage;
+  // Whether the just-signed-in user should skip profile-setup. Fetched and
+  // settled *before* [_isAuthenticated] flips true and [notifyListeners]
+  // fires, not after - the router's `redirect` (via `refreshListenable`)
+  // reacts to that notification immediately and would otherwise race ahead
+  // to the dashboard, unmounting the login/register screen before a
+  // separate post-await navigation call could ever run.
+  bool _profileCompleted = true;
 
   bool get isAuthenticated => _isAuthenticated;
+  bool get profileCompleted => _profileCompleted;
 
   /// True once the stored-session check on startup has finished. The router
   /// uses this to hold on a splash state rather than flashing the login
@@ -27,7 +36,11 @@ class AuthProvider extends ChangeNotifier {
   /// Restores auth state from the securely stored token. Call once at app
   /// startup, before the first frame that depends on [isAuthenticated].
   Future<void> initialize() async {
-    _isAuthenticated = await _authService.hasValidStoredSession();
+    final hasSession = await _authService.hasValidStoredSession();
+    if (hasSession) {
+      _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
+    }
+    _isAuthenticated = hasSession;
     _isInitialized = true;
     notifyListeners();
   }
@@ -55,12 +68,18 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> signUpWithEmail({
     required String email,
+    required String username,
     required String password,
   }) async {
     _setLoading(true);
     _setError(null);
     try {
-      await _authService.registerWithEmail(email: email, password: password);
+      await _authService.registerWithEmail(
+        email: email,
+        username: username,
+        password: password,
+      );
+      _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
       _isAuthenticated = true;
       notifyListeners();
       return true;
@@ -83,6 +102,7 @@ class AuthProvider extends ChangeNotifier {
     _setError(null);
     try {
       await _authService.signInWithEmail(email: email, password: password);
+      _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
       _isAuthenticated = true;
       notifyListeners();
       return true;
@@ -102,6 +122,7 @@ class AuthProvider extends ChangeNotifier {
     _setError(null);
     try {
       await _authService.signInWithGoogle();
+      _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
       _isAuthenticated = true;
       notifyListeners();
       return true;

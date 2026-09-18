@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
       password: _passwordController.text,
     );
     if (success && mounted) {
-      context.go(AppRoutes.activityDashboardScreen);
+      _routeAfterSignIn(auth);
     }
   }
 
@@ -42,8 +42,23 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     final success = await auth.signInWithGoogle();
     if (success && mounted) {
-      context.go(AppRoutes.activityDashboardScreen);
+      _routeAfterSignIn(auth);
     }
+  }
+
+  // auth.profileCompleted is already settled by the time signIn*() returns -
+  // AuthProvider awaits it before flipping isAuthenticated, precisely so
+  // there's no async gap here that the router's own redirect (which reacts
+  // to isAuthenticated via refreshListenable) could race ahead of and
+  // unmount this screen before this call runs. A first-time Google sign-in
+  // creates an account with no profile yet, just like email registration -
+  // this routes it to profile-setup the same way instead of the dashboard.
+  void _routeAfterSignIn(AuthProvider auth) {
+    context.go(
+      auth.profileCompleted
+          ? AppRoutes.activityDashboardScreen
+          : AppRoutes.profileSetupScreen,
+    );
   }
 
   @override

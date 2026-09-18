@@ -14,8 +14,11 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  static final _usernamePattern = RegExp(r'^[a-zA-Z0-9_]+$');
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
@@ -24,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -34,6 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final auth = context.read<AuthProvider>();
     final success = await auth.signUpWithEmail(
       email: _emailController.text.trim(),
+      username: _usernameController.text.trim(),
       password: _passwordController.text,
     );
     if (success && mounted) {
@@ -45,7 +50,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final auth = context.read<AuthProvider>();
     final success = await auth.signInWithGoogle();
     if (success && mounted) {
-      context.go(AppRoutes.profileSetupScreen);
+      // auth.profileCompleted is already settled by the time signInWithGoogle
+      // returns (see AuthProvider) - no async gap here for the router's own
+      // redirect to race ahead of and unmount this screen before this runs.
+      context.go(
+        auth.profileCompleted
+            ? AppRoutes.activityDashboardScreen
+            : AppRoutes.profileSetupScreen,
+      );
     }
   }
 
@@ -132,6 +144,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Email is required';
               if (!v.contains('@')) return 'Enter a valid email';
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            controller: _usernameController,
+            label: 'Username',
+            hint: 'yourname',
+            validator: (v) {
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return 'Username is required';
+              if (value.length < 3 || value.length > 50) {
+                return 'Username must be between 3 and 50 characters';
+              }
+              if (!_usernamePattern.hasMatch(value)) {
+                return 'Username may only contain letters, numbers, and underscores';
+              }
               return null;
             },
           ),

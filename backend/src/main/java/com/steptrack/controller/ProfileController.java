@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/profile")
 @RequiredArgsConstructor
@@ -40,23 +42,30 @@ public class ProfileController {
         }
     }
 
+    /**
+     * Return type is {@code ResponseEntity<?>}, not the usual
+     * {@code ResponseEntity<UserProfileResponse>} - like {@code ConsultantController}/
+     * {@code FriendController}, the 400 here carries a real {@code message} (e.g.
+     * "Username already taken") so the client can show it verbatim instead of a
+     * generic failure - a bare {@code .build()} would silently swallow exactly the
+     * detail a username-collision error needs to be useful.
+     */
     @PutMapping
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<UserProfileResponse> updateProfile(
-            @Valid @RequestBody UserProfileRequest request) {
+    public ResponseEntity<?> updateProfile(@Valid @RequestBody UserProfileRequest request) {
         try {
             String email = profileService.getCurrentUserEmail();
             if (email == null) {
                 logger.warn("No authenticated user found");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
-            
+
             UserProfileResponse updatedProfile = profileService.saveProfile(email, request);
             logger.info("Profile updated for user: {}", email);
             return ResponseEntity.ok(updatedProfile);
         } catch (IllegalArgumentException e) {
             logger.warn("Invalid profile update: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
             logger.error("Error updating profile", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

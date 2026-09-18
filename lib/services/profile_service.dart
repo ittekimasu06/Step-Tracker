@@ -5,7 +5,13 @@ import 'api_client.dart';
 class UserProfile {
   final String id;
   final String email;
+  final String? username;
   final String fullName;
+  final String? description;
+  // Null or 'default' both mean the initials-gradient avatar - see the
+  // backend's UserProfile.avatarId doc for why 'default' exists as an
+  // explicit sentinel distinct from null.
+  final String? avatarId;
   final int? age;
   final double? weightKg;
   final double? heightCm;
@@ -18,7 +24,10 @@ class UserProfile {
   UserProfile({
     required this.id,
     required this.email,
+    this.username,
     required this.fullName,
+    this.description,
+    this.avatarId,
     this.age,
     this.weightKg,
     this.heightCm,
@@ -33,7 +42,10 @@ class UserProfile {
     return UserProfile(
       id: json['id'] as String? ?? '',
       email: json['email'] as String? ?? '',
+      username: json['username'] as String?,
       fullName: json['fullName'] as String? ?? '',
+      description: json['description'] as String?,
+      avatarId: json['avatarId'] as String?,
       age: json['age'] as int?,
       weightKg: (json['weightKg'] as num?)?.toDouble(),
       heightCm: (json['heightCm'] as num?)?.toDouble(),
@@ -47,7 +59,10 @@ class UserProfile {
 
   Map<String, dynamic> toJson() {
     return {
+      'username': username,
       'fullName': fullName,
+      'description': description,
+      'avatarId': avatarId,
       'age': age,
       'weightKg': weightKg,
       'heightCm': heightCm,
@@ -60,7 +75,10 @@ class UserProfile {
   }
 
   UserProfile copyWith({
+    String? username,
     String? fullName,
+    String? description,
+    String? avatarId,
     int? age,
     double? weightKg,
     double? heightCm,
@@ -73,7 +91,10 @@ class UserProfile {
     return UserProfile(
       id: id,
       email: email,
+      username: username ?? this.username,
       fullName: fullName ?? this.fullName,
+      description: description ?? this.description,
+      avatarId: avatarId ?? this.avatarId,
       age: age ?? this.age,
       weightKg: weightKg ?? this.weightKg,
       heightCm: heightCm ?? this.heightCm,
@@ -113,16 +134,14 @@ class ProfileService {
     }
   }
 
-  /// Save or update the user's profile.
-  Future<bool> saveProfile(UserProfile profile) async {
-    try {
-      await _api.put('/profile', data: profile.toJson());
-      if (!_updatesController.isClosed) {
-        _updatesController.add(profile);
-      }
-      return true;
-    } on ApiException {
-      return false;
+  /// Save or update the user's profile. Rethrows [ApiException] (unlike most
+  /// services here) rather than collapsing to a bool - a username collision
+  /// carries a real, user-relevant message (see [ProfileController]'s
+  /// `message` body on 400) worth showing as-is, not a generic failure.
+  Future<void> saveProfile(UserProfile profile) async {
+    await _api.put('/profile', data: profile.toJson());
+    if (!_updatesController.isClosed) {
+      _updatesController.add(profile);
     }
   }
 
@@ -130,5 +149,19 @@ class ProfileService {
   Future<bool> isProfileCompleted() async {
     final profile = await fetchProfile();
     return profile?.profileCompleted ?? false;
+  }
+
+  /// Whether a just-signed-in user should be routed straight to the
+  /// dashboard rather than profile-setup. Fails open (returns true, i.e.
+  /// skip profile-setup) if the profile can't be fetched at all - a
+  /// network blip right after sign-in is far less disruptive than wrongly
+  /// bouncing an already-complete returning user back into profile-setup.
+  Future<bool> shouldSkipProfileSetup() async {
+    try {
+      final data = await _api.get('/profile');
+      return UserProfile.fromJson(data).profileCompleted;
+    } on ApiException {
+      return true;
+    }
   }
 }

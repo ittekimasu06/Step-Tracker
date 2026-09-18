@@ -37,6 +37,10 @@ class AuthFlowIntegrationTest {
         return "user-" + UUID.randomUUID() + "@example.com";
     }
 
+    private static String uniqueUsername() {
+        return "user" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
     private static HttpEntity<Void> bearer(String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -56,6 +60,7 @@ class AuthFlowIntegrationTest {
         String email = uniqueEmail();
         RegisterRequest request = RegisterRequest.builder()
                 .email(email)
+                .username(uniqueUsername())
                 .password("secret123")
                 .passwordConfirm("secret123")
                 .build();
@@ -73,6 +78,7 @@ class AuthFlowIntegrationTest {
     void registerRejectsMismatchedPasswordConfirmation() {
         RegisterRequest request = RegisterRequest.builder()
                 .email(uniqueEmail())
+                .username(uniqueUsername())
                 .password("secret123")
                 .passwordConfirm("something-else")
                 .build();
@@ -88,6 +94,7 @@ class AuthFlowIntegrationTest {
         String email = uniqueEmail();
         RegisterRequest request = RegisterRequest.builder()
                 .email(email)
+                .username(uniqueUsername())
                 .password("secret123")
                 .passwordConfirm("secret123")
                 .build();
@@ -103,7 +110,7 @@ class AuthFlowIntegrationTest {
     void loginSucceedsWithCorrectPasswordAndFailsWithWrongOne() {
         String email = uniqueEmail();
         rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(email).password("secret123").passwordConfirm("secret123").build(),
+                .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
 
         ResponseEntity<AuthResponse> ok = rest.postForEntity("/auth/login",
@@ -134,7 +141,7 @@ class AuthFlowIntegrationTest {
         String email = uniqueEmail();
         ResponseEntity<AuthResponse> registered = rest.postForEntity("/auth/register",
                 RegisterRequest.builder()
-                        .email(email).password("secret123").passwordConfirm("secret123").build(),
+                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
         String token = registered.getBody().getToken();
 
@@ -184,7 +191,7 @@ class AuthFlowIntegrationTest {
     void unsetGoalsDefaultToNullNotZero() {
         String email = uniqueEmail();
         String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(email).password("secret123").passwordConfirm("secret123").build(),
+                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class).getBody().getToken();
 
         ResponseEntity<UserProfileResponse> response = rest.exchange(
@@ -199,7 +206,7 @@ class AuthFlowIntegrationTest {
     void goalsCanBeUpdatedIndependentlyOfProfileFields() {
         String email = uniqueEmail();
         String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(email).password("secret123").passwordConfirm("secret123").build(),
+                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class).getBody().getToken();
 
         HttpHeaders headers = new HttpHeaders();
@@ -220,12 +227,12 @@ class AuthFlowIntegrationTest {
     void oneUsersTokenNeverExposesAnotherUsersProfile() {
         String emailA = uniqueEmail();
         String tokenA = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(emailA).password("secret123").passwordConfirm("secret123").build(),
+                .email(emailA).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class).getBody().getToken();
 
         String emailB = uniqueEmail();
         String tokenB = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(emailB).password("secret123").passwordConfirm("secret123").build(),
+                .email(emailB).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class).getBody().getToken();
 
         HttpHeaders headers = new HttpHeaders();
@@ -245,7 +252,7 @@ class AuthFlowIntegrationTest {
     void deletedAccountCanNoLongerAuthenticateEvenWithItsOldToken() {
         String email = uniqueEmail();
         String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(email).password("secret123").passwordConfirm("secret123").build(),
+                .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class).getBody().getToken();
 
         ResponseEntity<Void> deleted = rest.exchange(
@@ -260,8 +267,95 @@ class AuthFlowIntegrationTest {
         // The email is free to register again.
         ResponseEntity<AuthResponse> reRegistered = rest.postForEntity("/auth/register",
                 RegisterRequest.builder()
-                        .email(email).password("secret123").passwordConfirm("secret123").build(),
+                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
         assertThat(reRegistered.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void registerRequiresUsername() {
+        RegisterRequest request = RegisterRequest.builder()
+                .email(uniqueEmail())
+                .password("secret123")
+                .passwordConfirm("secret123")
+                .build();
+
+        ResponseEntity<AuthResponse> response =
+                rest.postForEntity("/auth/register", request, AuthResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void registerRejectsDuplicateUsernameCaseInsensitively() {
+        String username = uniqueUsername();
+        rest.postForEntity("/auth/register", RegisterRequest.builder()
+                        .email(uniqueEmail()).username(username)
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class);
+
+        ResponseEntity<AuthResponse> duplicate = rest.postForEntity("/auth/register",
+                RegisterRequest.builder()
+                        .email(uniqueEmail()).username(username.toUpperCase())
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class);
+
+        assertThat(duplicate.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void registeredUsernameIsReturnedOnProfile() {
+        String username = uniqueUsername();
+        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
+                        .email(uniqueEmail()).username(username)
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class).getBody().getToken();
+
+        ResponseEntity<UserProfileResponse> profile = rest.exchange(
+                "/profile", HttpMethod.GET, bearer(token), UserProfileResponse.class);
+        assertThat(profile.getBody().getUsername()).isEqualTo(username);
+    }
+
+    @Test
+    void changingUsernameToOneAlreadyTakenIsRejected() {
+        String takenUsername = uniqueUsername();
+        rest.postForEntity("/auth/register", RegisterRequest.builder()
+                        .email(uniqueEmail()).username(takenUsername)
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class);
+
+        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
+                        .email(uniqueEmail()).username(uniqueUsername())
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class).getBody().getToken();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        ResponseEntity<String> response = rest.exchange("/profile", HttpMethod.PUT,
+                new HttpEntity<>(UserProfileRequest.builder().username(takenUsername).build(), headers),
+                String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("Username already taken");
+    }
+
+    @Test
+    void descriptionAndAvatarIdRoundTripCorrectly() {
+        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
+                        .email(uniqueEmail()).username(uniqueUsername())
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class).getBody().getToken();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        rest.exchange("/profile", HttpMethod.PUT,
+                new HttpEntity<>(UserProfileRequest.builder()
+                        .description("Hi, I like walking!").avatarId("avatar_horse.png").build(), headers),
+                UserProfileResponse.class);
+
+        ResponseEntity<UserProfileResponse> reread = rest.exchange(
+                "/profile", HttpMethod.GET, bearer(token), UserProfileResponse.class);
+        assertThat(reread.getBody().getDescription()).isEqualTo("Hi, I like walking!");
+        assertThat(reread.getBody().getAvatarId()).isEqualTo("avatar_horse.png");
     }
 }

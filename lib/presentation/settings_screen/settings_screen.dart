@@ -6,7 +6,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/activity_estimator.dart';
+import '../../services/api_client.dart';
 import '../../services/profile_service.dart';
+import '../../services/settings_dirty_state.dart';
 import '../../theme/app_theme.dart';
 import './widgets/appearance_settings_widget.dart';
 import './widgets/goal_settings_widget.dart';
@@ -27,71 +29,178 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _activeTimeGoal = kDefaultActiveMinutesGoal;
   int _calorieGoal = kDefaultCalorieGoal;
 
-  // Profile (loaded from the backend)
-  String _userName = '';
-  int _userAge = 0;
-  double _userWeightKg = 0;
-  double _userHeightCm = 0;
-
-  // Preferences
+  // Preferences - not yet actually persisted anywhere (no backend field for
+  // either group exists), but still tracked for dirty-state/Save purposes to
+  // match what this button visually appears to cover; a pre-existing gap,
+  // not something this phase introduces or fixes.
   bool _useMetric = true;
   bool _goalReminders = true;
   bool _morningReminder = true;
   bool _eveningReminder = false;
   bool _vibrationFeedback = true;
 
-  bool _isLoadingProfile = true;
   bool _isSavingProfile = false;
+
+  // The last-loaded/last-saved snapshot every field above is compared
+  // against to compute [_hasUnsavedChanges] - refreshed on initial load and
+  // after every successful save. Profile (name/age/weight/height/username/
+  // etc.) is deliberately excluded - it's now self-contained in
+  // ProfileSettingsWidget with its own inline Save, not part of this
+  // screen's global Save at all.
+  _GoalsSnapshot _lastSaved = const _GoalsSnapshot(
+    stepGoal: kDefaultStepGoal,
+    activeTimeGoal: kDefaultActiveMinutesGoal,
+    calorieGoal: kDefaultCalorieGoal,
+    useMetric: true,
+    goalReminders: true,
+    morningReminder: true,
+    eveningReminder: false,
+    vibrationFeedback: true,
+  );
+
+  bool get _hasUnsavedChanges =>
+      _stepGoal != _lastSaved.stepGoal ||
+      _activeTimeGoal != _lastSaved.activeTimeGoal ||
+      _calorieGoal != _lastSaved.calorieGoal ||
+      _useMetric != _lastSaved.useMetric ||
+      _goalReminders != _lastSaved.goalReminders ||
+      _morningReminder != _lastSaved.morningReminder ||
+      _eveningReminder != _lastSaved.eveningReminder ||
+      _vibrationFeedback != _lastSaved.vibrationFeedback;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    SettingsDirtyState.instance.registerDiscardHandler(_discardChanges);
+  }
+
+  @override
+  void dispose() {
+    SettingsDirtyState.instance.unregisterDiscardHandler();
+    super.dispose();
+  }
+
+  /// Called by [SettingsDirtyState] after the user confirms discarding, from
+  /// [AppNavigation]'s leave-tab guard - resets every tracked field back to
+  /// the last-loaded/saved snapshot.
+  void _discardChanges() {
+    if (!mounted) return;
+    setState(() {
+      _stepGoal = _lastSaved.stepGoal;
+      _activeTimeGoal = _lastSaved.activeTimeGoal;
+      _calorieGoal = _lastSaved.calorieGoal;
+      _useMetric = _lastSaved.useMetric;
+      _goalReminders = _lastSaved.goalReminders;
+      _morningReminder = _lastSaved.morningReminder;
+      _eveningReminder = _lastSaved.eveningReminder;
+      _vibrationFeedback = _lastSaved.vibrationFeedback;
+    });
+  }
+
+  void _takeSnapshot() {
+    _lastSaved = _GoalsSnapshot(
+      stepGoal: _stepGoal,
+      activeTimeGoal: _activeTimeGoal,
+      calorieGoal: _calorieGoal,
+      useMetric: _useMetric,
+      goalReminders: _goalReminders,
+      morningReminder: _morningReminder,
+      eveningReminder: _eveningReminder,
+      vibrationFeedback: _vibrationFeedback,
+    );
   }
 
   Future<void> _loadProfile() async {
     final profile = await ProfileService.instance.fetchProfile();
     if (!mounted) return;
     setState(() {
-      _isLoadingProfile = false;
       if (profile != null) {
-        _userName = profile.fullName;
-        _userAge = profile.age ?? 0;
-        _userWeightKg = profile.weightKg ?? 0;
-        _userHeightCm = profile.heightCm ?? 0;
         _stepGoal = profile.stepGoal ?? kDefaultStepGoal;
         _activeTimeGoal = profile.activeMinutesGoal ?? kDefaultActiveMinutesGoal;
         _calorieGoal = profile.calorieGoal ?? kDefaultCalorieGoal;
       }
+      _takeSnapshot();
     });
+  }
+
+  Future<bool> _confirmDiscardDialog() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Discard Changes?',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontWeight: FontWeight.w700,
+            color: Theme.of(ctx).colorScheme.onSurface,
+          ),
+        ),
+        content: Text(
+          'You have unsaved changes on this screen. Leaving now will discard them.',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 13,
+            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Manrope', color: AppTheme.textSecondary(ctx)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Discard',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                color: Theme.of(ctx).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
-    return Scaffold(
+    // Kept in sync on every rebuild rather than threaded through each
+    // individual onChanged callback above - simpler, and every field change
+    // already triggers a rebuild via its own setState anyway. Safe to set
+    // synchronously here: SettingsDirtyState has no listeners that rebuild
+    // anything reactively (AppNavigation only reads .value at tap-time), so
+    // this can't trigger a setState-during-build issue.
+    SettingsDirtyState.instance.value = _hasUnsavedChanges;
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final discard = await _confirmDiscardDialog();
+        if (discard && mounted) {
+          SettingsDirtyState.instance.discard();
+          if (context.mounted) Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _buildHeader(context)),
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _isLoadingProfile
-                    ? _buildProfileSkeleton(context)
-                    : ProfileSettingsWidget(
-                  userName: _userName,
-                  userAge: _userAge,
-                  weightKg: _userWeightKg,
-                  heightCm: _userHeightCm,
-                  onNameChanged: (v) => setState(() => _userName = v),
-                  onAgeChanged: (v) => setState(() => _userAge = v),
-                  onWeightChanged: (v) =>
-                      setState(() => _userWeightKg = v),
-                  onHeightChanged: (v) =>
-                      setState(() => _userHeightCm = v),
-                ),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: ProfileSettingsWidget(),
               ),
             ),
             SliverToBoxAdapter(
@@ -152,23 +261,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildProfileSkeleton(BuildContext context) {
-    return Container(
-      height: 120,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.overlay(context, 15), width: 1),
-      ),
-      child: const Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: AppTheme.stepsGreen,
-        ),
       ),
     );
   }
@@ -210,14 +302,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           )
               : TextButton(
-            onPressed: _saveSettings,
-            child: const Text(
+            onPressed: _hasUnsavedChanges ? _saveSettings : null,
+            child: Text(
               'Save',
               style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.stepsGreen,
+                color: _hasUnsavedChanges
+                    ? AppTheme.stepsGreen
+                    : AppTheme.textDisabled(context),
               ),
             ),
           ),
@@ -424,28 +518,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Saves only Goals (Units/Notifications have no backend field to persist
+  /// to yet - a pre-existing gap, unchanged by this phase). Profile is no
+  /// longer touched here at all - it's self-contained in
+  /// ProfileSettingsWidget with its own inline Save. Every field left null
+  /// below is left untouched server-side, per ProfileService's partial-
+  /// update convention.
   Future<void> _saveSettings() async {
+    if (!_hasUnsavedChanges) return;
     setState(() => _isSavingProfile = true);
 
-    final currentProfile = await ProfileService.instance.fetchProfile();
-    final updatedProfile = UserProfile(
-      id: currentProfile?.id ?? '',
-      email: currentProfile?.email ?? '',
-      fullName: _userName,
-      age: _userAge > 0 ? _userAge : null,
-      weightKg: _userWeightKg > 0 ? _userWeightKg : null,
-      heightCm: _userHeightCm > 0 ? _userHeightCm : null,
-      gender: currentProfile?.gender,
+    final request = UserProfile(
+      id: '',
+      email: '',
+      fullName: '',
       profileCompleted: true,
       stepGoal: _stepGoal,
       activeMinutesGoal: _activeTimeGoal,
       calorieGoal: _calorieGoal,
     );
 
-    final success = await ProfileService.instance.saveProfile(updatedProfile);
+    var success = true;
+    try {
+      await ProfileService.instance.saveProfile(request);
+    } on ApiException {
+      success = false;
+    }
 
     if (!mounted) return;
-    setState(() => _isSavingProfile = false);
+    setState(() {
+      _isSavingProfile = false;
+      if (success) _takeSnapshot();
+    });
+    SettingsDirtyState.instance.value = _hasUnsavedChanges;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -655,4 +760,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+}
+
+/// The last-loaded/last-saved values [_SettingsScreenState]'s dirty-check
+/// compares live state against - see [_SettingsScreenState._hasUnsavedChanges].
+class _GoalsSnapshot {
+  final int stepGoal;
+  final int activeTimeGoal;
+  final int calorieGoal;
+  final bool useMetric;
+  final bool goalReminders;
+  final bool morningReminder;
+  final bool eveningReminder;
+  final bool vibrationFeedback;
+
+  const _GoalsSnapshot({
+    required this.stepGoal,
+    required this.activeTimeGoal,
+    required this.calorieGoal,
+    required this.useMetric,
+    required this.goalReminders,
+    required this.morningReminder,
+    required this.eveningReminder,
+    required this.vibrationFeedback,
+  });
 }

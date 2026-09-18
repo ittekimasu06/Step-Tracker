@@ -16,4 +16,8 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, UUID> 
      * authenticated user enumerate the whole user base).
      */
     List<UserProfile> findTop20ByFullNameContainingIgnoreCaseAndIdNot(String query, UUID selfId);
+
+    boolean existsByUsernameIgnoreCase(String username);
+
+    boolean existsByUsernameIgnoreCaseAndIdNot(String username, UUID selfId);
 }

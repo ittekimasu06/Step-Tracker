@@ -69,8 +69,20 @@ public class ProfileService {
                         .build());
 
         // Update profile fields
+        if (request.getUsername() != null && !request.getUsername().isEmpty()) {
+            if (userProfileRepository.existsByUsernameIgnoreCaseAndIdNot(request.getUsername(), user.getId())) {
+                throw new IllegalArgumentException("Username already taken");
+            }
+            profile.setUsername(request.getUsername());
+        }
         if (request.getFullName() != null && !request.getFullName().isEmpty()) {
             profile.setFullName(request.getFullName());
+        }
+        if (request.getDescription() != null) {
+            profile.setDescription(request.getDescription());
+        }
+        if (request.getAvatarId() != null) {
+            profile.setAvatarId(request.getAvatarId());
         }
         if (request.getAge() != null) {
             profile.setAge(request.getAge());
@@ -125,7 +137,10 @@ public class ProfileService {
         return UserProfileResponse.builder()
                 .id(profile.getId())
                 .email(email)
+                .username(profile.getUsername())
                 .fullName(profile.getFullName())
+                .description(profile.getDescription())
+                .avatarId(profile.getAvatarId())
                 .age(profile.getAge())
                 .weightKg(profile.getWeightKg())
                 .heightCm(profile.getHeightCm())

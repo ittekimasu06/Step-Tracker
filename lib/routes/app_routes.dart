@@ -40,7 +40,9 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
         return AppRoutes.loginScreen;
       }
       if (isAuthenticated && isAuthRoute) {
-        return AppRoutes.activityDashboardScreen;
+        return authProvider.profileCompleted
+            ? AppRoutes.activityDashboardScreen
+            : AppRoutes.profileSetupScreen;
       }
       return null;
     },

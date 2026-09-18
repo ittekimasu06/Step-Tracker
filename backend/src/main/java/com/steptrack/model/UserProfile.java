@@ -24,8 +24,33 @@ public class UserProfile {
     @Id
     private UUID id;
 
+    /**
+     * Unique (case-insensitively - enforced by a unique index on lower(username), not
+     * just the plain column) display handle. Required at registration, unlike every
+     * other field here which is filled in later during profile-setup.
+     */
+    @Column(unique = true)
+    private String username;
+
     @Column(name = "full_name")
     private String fullName;
+
+    @Column(length = 500)
+    private String description;
+
+    /**
+     * Null (never explicitly chosen - every pre-existing row) or the literal string
+     * "default" (explicitly re-selected in the picker) both mean the initials-gradient
+     * avatar (this app's only look until this field existed). Any other value is a
+     * bundled asset identifier (a filename under assets/images/, e.g.
+     * "avatar_horse.png") to show instead. The picker always sends the literal
+     * "default" string rather than null for that option, since {@link
+     * com.steptrack.service.ProfileService#saveProfile}'s partial-update convention
+     * treats a null request field as "unchanged," not "clear this" - there would
+     * otherwise be no way to go back to the default once a real avatar was chosen.
+     */
+    @Column(name = "avatar_id")
+    private String avatarId;
 
     @Column
     private Integer age;

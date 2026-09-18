@@ -35,6 +35,10 @@ class StepsFlowIntegrationTest {
         return "user-" + UUID.randomUUID() + "@example.com";
     }
 
+    private static String uniqueUsername() {
+        return "user" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
     private static HttpEntity<Void> bearer(String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -45,7 +49,8 @@ class StepsFlowIntegrationTest {
         String email = uniqueEmail();
         ResponseEntity<AuthResponse> response = rest.postForEntity("/auth/register",
                 RegisterRequest.builder()
-                        .email(email).password("secret123").passwordConfirm("secret123").build(),
+                        .email(email).username(uniqueUsername())
+                        .password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
         return response.getBody().getToken();
     }

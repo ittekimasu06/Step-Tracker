@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/api_client.dart';
 import '../../services/profile_service.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
@@ -16,9 +17,11 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _ageController = TextEditingController();
   final _weightController = TextEditingController();
   final _heightController = TextEditingController();
+  static final _usernamePattern = RegExp(r'^[a-zA-Z0-9_]+$');
 
   String? _selectedGender;
   bool _isSaving = false;
@@ -34,6 +37,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _usernameController.dispose();
     _ageController.dispose();
     _weightController.dispose();
     _heightController.dispose();
@@ -51,6 +55,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final profile = UserProfile(
       id: '',
       email: '',
+      username: _usernameController.text.trim(),
       fullName: _nameController.text.trim(),
       age: int.tryParse(_ageController.text.trim()),
       weightKg: double.tryParse(_weightController.text.trim()),
@@ -59,16 +64,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       profileCompleted: true,
     );
 
-    final success = await ProfileService.instance.saveProfile(profile);
-
-    if (!mounted) return;
-
-    if (success) {
+    try {
+      await ProfileService.instance.saveProfile(profile);
+      if (!mounted) return;
       context.go(AppRoutes.activityDashboardScreen);
-    } else {
+    } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorMessage = 'Failed to save profile. Please try again.';
+        _errorMessage = e.message;
       });
     }
   }
@@ -155,6 +159,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             keyboardType: TextInputType.name,
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Full name is required';
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            controller: _usernameController,
+            label: 'Username',
+            hint: 'e.g. alex_j',
+            keyboardType: TextInputType.text,
+            validator: (v) {
+              final value = v?.trim() ?? '';
+              if (value.isEmpty) return 'Username is required';
+              if (value.length < 3 || value.length > 50) {
+                return 'Must be 3-50 characters';
+              }
+              if (!_usernamePattern.hasMatch(value)) {
+                return 'Letters, numbers, and underscores only';
+              }
               return null;
             },
           ),

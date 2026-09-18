@@ -16,7 +16,16 @@ CREATE TABLE users (
 
 CREATE TABLE user_profiles (
   id UUID PRIMARY KEY REFERENCES users(id),
+  -- Plain UNIQUE here, not a case-insensitive index on lower(username) like the real
+  -- Postgres schema has - H2 doesn't accept that CREATE INDEX syntax. Case-insensitive
+  -- uniqueness is actually enforced at the application level
+  -- (UserProfileRepository.existsByUsernameIgnoreCase, checked before every
+  -- insert/update), so this weaker DB-level constraint doesn't reduce real test
+  -- coverage - see AuthFlowIntegrationTest.registerRejectsDuplicateUsernameCaseInsensitively.
+  username VARCHAR(50) NOT NULL UNIQUE,
   full_name VARCHAR(255),
+  description VARCHAR(500),
+  avatar_id VARCHAR(100),
   age INTEGER,
   weight_kg DECIMAL(5,2),
   height_cm DECIMAL(5,2),

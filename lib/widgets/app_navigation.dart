@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../services/settings_dirty_state.dart';
 import '../theme/app_theme.dart';
 
 class _TabSpec {
@@ -64,6 +65,80 @@ class _AppNavigationState extends State<AppNavigation> {
     }
   }
 
+  Future<void> _onTabTap(_TabSpec tab, bool isStub) async {
+    if (isStub) return;
+    final targetBranch = tab.branchIndex!;
+    final leavingDirtySettings = widget.navigationShell.currentIndex == 3 &&
+        targetBranch != 3 &&
+        SettingsDirtyState.instance.value;
+
+    // The tab highlight and goBranch must both wait on the dialog's result,
+    // not happen before it - otherwise the highlight visibly jumps to the
+    // new tab and jumps back on Cancel.
+    if (leavingDirtySettings) {
+      final discard = await _confirmDiscardSettingsDialog();
+      if (discard != true) return;
+      SettingsDirtyState.instance.discard();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedVisualIndex = _tabs.indexWhere(
+        (t) => t.branchIndex == targetBranch,
+      );
+    });
+    widget.navigationShell.goBranch(
+      targetBranch,
+      initialLocation: targetBranch == widget.navigationShell.currentIndex,
+    );
+  }
+
+  Future<bool?> _confirmDiscardSettingsDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Discard Changes?',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontWeight: FontWeight.w700,
+            color: Theme.of(ctx).colorScheme.onSurface,
+          ),
+        ),
+        content: Text(
+          'You have unsaved changes on this screen. Leaving now will discard them.',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 13,
+            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Manrope', color: AppTheme.textSecondary(ctx)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Discard',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                color: Theme.of(ctx).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -87,16 +162,7 @@ class _AppNavigationState extends State<AppNavigation> {
                 final isStub = tab.branchIndex == null;
 
                 return GestureDetector(
-                  onTap: () {
-                    if (isStub) return;
-                    setState(() => _selectedVisualIndex = i);
-                    widget.navigationShell.goBranch(
-                      tab.branchIndex!,
-                      initialLocation:
-                          tab.branchIndex ==
-                          widget.navigationShell.currentIndex,
-                    );
-                  },
+                  onTap: () => _onTabTap(tab, isStub),
                   behavior: HitTestBehavior.opaque,
                   child: Opacity(
                     opacity: isStub ? 0.4 : 1.0,

@@ -16,7 +16,10 @@ public class UserProfileResponse {
 
     private UUID id;
     private String email;
+    private String username;
     private String fullName;
+    private String description;
+    private String avatarId;
     private Integer age;
     private BigDecimal weightKg;
     private BigDecimal heightCm;
