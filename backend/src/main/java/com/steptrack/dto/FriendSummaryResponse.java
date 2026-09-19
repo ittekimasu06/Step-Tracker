@@ -14,6 +14,7 @@ public class FriendSummaryResponse {
 
     private UUID friendUserId;
     private String fullName;
+    private String avatarId;
     private int todaySteps;
     private int todayActiveMinutes;
 }

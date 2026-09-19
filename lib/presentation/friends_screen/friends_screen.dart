@@ -5,6 +5,7 @@ import '../../routes/app_routes.dart';
 import '../../services/api_client.dart';
 import '../../services/friend_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/avatar_circle.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -457,6 +458,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
           ),
           const SizedBox(width: 8),
+          AvatarCircle(
+            avatarId: entry['avatarId'] as String?,
+            displayName: entry['fullName'] as String? ?? 'Unknown user',
+            size: 32,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               name,
@@ -498,6 +505,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget _buildFriendRow(Map<String, dynamic> friend) {
     final steps = friend['todaySteps'] as int? ?? 0;
     final activeMin = friend['todayActiveMinutes'] as int? ?? 0;
+    final fullName = friend['fullName'] as String? ?? 'Unknown user';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
@@ -508,9 +516,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
       child: Row(
         children: [
+          AvatarCircle(
+            avatarId: friend['avatarId'] as String?,
+            displayName: fullName,
+            size: 40,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              friend['fullName'] as String? ?? 'Unknown user',
+              fullName,
               style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 15,

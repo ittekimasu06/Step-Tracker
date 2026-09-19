@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/api_client.dart';
 import '../../../services/profile_service.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/avatar_circle.dart';
 import 'avatar_picker_dialog.dart';
 
 /// The Profile card in Settings - self-contained, unlike every other section
@@ -241,7 +242,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   Widget _buildCollapsed() {
     return Row(
       children: [
-        _buildAvatar(size: 56),
+        AvatarCircle(avatarId: _avatarId, displayName: _nameController.text, size: 56),
         const SizedBox(width: 16),
         Expanded(
           child: Text(
@@ -267,7 +268,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                _buildAvatar(size: 56),
+                AvatarCircle(avatarId: _avatarId, displayName: _nameController.text, size: 56),
                 Positioned(
                   right: -2,
                   bottom: -2,
@@ -283,7 +284,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
                           width: 2,
                         ),
                       ),
-                      child: const Icon(Icons.edit, size: 12, color: Colors.black),
+                      child: Icon(
+                        Icons.edit,
+                        size: 12,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.black
+                            : Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -400,58 +407,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     );
   }
 
-  Widget _buildAvatar({required double size}) {
-    final avatarId = _avatarId;
-    if (avatarId != null && avatarId != 'default') {
-      return ClipOval(
-        child: Image.asset(
-          'assets/images/$avatarId',
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildInitialsAvatar(size),
-        ),
-      );
-    }
-    return _buildInitialsAvatar(size);
-  }
-
-  Widget _buildInitialsAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.stepsGreen.withAlpha(153),
-            AppTheme.activeBlue.withAlpha(153),
-          ],
-        ),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          _initials,
-          style: TextStyle(
-            fontFamily: 'Manrope',
-            fontSize: size * 0.32,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
-
-  String get _initials {
-    final name = _nameController.text.trim();
-    final words = name.split(RegExp(r'\s+'));
-    if (words.isEmpty || words.first.isEmpty) return '';
-    if (words.length == 1) {
-      return words.first.substring(0, words.first.length.clamp(0, 2)).toUpperCase();
-    }
-    return (words.first[0] + words.last[0]).toUpperCase();
-  }
 }
 
 Widget _sectionLabel(BuildContext context, String text) {

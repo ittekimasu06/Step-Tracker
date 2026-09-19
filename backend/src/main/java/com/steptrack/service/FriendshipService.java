@@ -190,12 +190,16 @@ public class FriendshipService {
         participantIds.add(self.getId());
 
         List<LeaderboardEntry> entries = participantIds.stream()
-                .map(userId -> LeaderboardEntry.builder()
-                        .userId(userId)
-                        .fullName(fullNameOf(userId))
-                        .steps(dailyStepsRepository.sumStepsBetween(userId, from, today))
-                        .isSelf(userId.equals(self.getId()))
-                        .build())
+                .map(userId -> {
+                    UserProfile profile = profileOf(userId);
+                    return LeaderboardEntry.builder()
+                            .userId(userId)
+                            .fullName(displayName(profile))
+                            .avatarId(profile != null ? profile.getAvatarId() : null)
+                            .steps(dailyStepsRepository.sumStepsBetween(userId, from, today))
+                            .isSelf(userId.equals(self.getId()))
+                            .build();
+                })
                 .sorted(Comparator.comparingInt(LeaderboardEntry::getSteps).reversed()
                         .thenComparing(LeaderboardEntry::getFullName))
                 .collect(Collectors.toList());
@@ -235,9 +239,11 @@ public class FriendshipService {
                     DailySteps todayEntry = dailyStepsRepository
                             .findByUserIdAndStepDate(friendId, today)
                             .orElse(null);
+                    UserProfile profile = profileOf(friendId);
                     return FriendSummaryResponse.builder()
                             .friendUserId(friendId)
-                            .fullName(fullNameOf(friendId))
+                            .fullName(displayName(profile))
+                            .avatarId(profile != null ? profile.getAvatarId() : null)
                             .todaySteps(todayEntry != null ? todayEntry.getStepCount() : 0)
                             .todayActiveMinutes(todayEntry != null ? todayEntry.getActiveMinutes() : 0)
                             .build();
@@ -256,11 +262,17 @@ public class FriendshipService {
         logger.info("Friendship removed between {} and {}", selfId, friendUserId);
     }
 
+    private UserProfile profileOf(UUID userId) {
+        return userProfileRepository.findById(userId).orElse(null);
+    }
+
+    private String displayName(UserProfile profile) {
+        String name = profile != null ? profile.getFullName() : null;
+        return (name != null && !name.isBlank()) ? name : "Unknown user";
+    }
+
     private String fullNameOf(UUID userId) {
-        return userProfileRepository.findById(userId)
-                .map(UserProfile::getFullName)
-                .filter(name -> name != null && !name.isBlank())
-                .orElse("Unknown user");
+        return displayName(profileOf(userId));
     }
 
     private User requireUser(String email) {

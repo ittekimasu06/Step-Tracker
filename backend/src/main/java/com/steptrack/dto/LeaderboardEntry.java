@@ -14,6 +14,7 @@ public class LeaderboardEntry {
 
     private UUID userId;
     private String fullName;
+    private String avatarId;
     private int steps;
 
     // Boxed Boolean, not primitive - a primitive `boolean isSelf` gets Lombok's
