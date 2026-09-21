@@ -1,10 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:label="steptrack"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- foregroundServiceType only - deliberately no android:exported here,
+             it would conflict with the plugin's own manifest (exported="true")
+             and fail the Gradle manifest merge. See step_tracker/background
+             service plan doc for why "health" (not "dataSync") is required -
+             dataSync/mediaProcessing services are capped at 6h/24h on Android
+             15+, which would silently stop all-day tracking mid-day. -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="health" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

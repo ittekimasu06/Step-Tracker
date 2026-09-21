@@ -21,7 +21,8 @@ class ProfileSettingsWidget extends StatefulWidget {
   State<ProfileSettingsWidget> createState() => _ProfileSettingsWidgetState();
 }
 
-class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
+class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
+    with SingleTickerProviderStateMixin {
   bool _expanded = false;
   bool _loading = true;
   bool _saving = false;
@@ -36,9 +37,23 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   late final TextEditingController _heightController;
   late final TextEditingController _descriptionController;
 
+  // Drives the collapsed<->expanded transition directly (0 = collapsed,
+  // 1 = expanded) instead of relying on AnimatedSwitcher's own per-entry
+  // controllers - see _buildAnimatedCard's doc for why: getting the
+  // sequenced close-animation right requires knowing exactly which
+  // direction the value is moving and controlling both children's opacity
+  // from the same single number, which fighting AnimatedSwitcher's internal
+  // (and not fully documented) forward/reverse semantics made fragile to
+  // get right blind.
+  late final AnimationController _expandController;
+
   @override
   void initState() {
     super.initState();
+    _expandController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
     _nameController = TextEditingController();
     _usernameController = TextEditingController();
     _ageController = TextEditingController();
@@ -50,6 +65,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
 
   @override
   void dispose() {
+    _expandController.dispose();
     _nameController.dispose();
     _usernameController.dispose();
     _ageController.dispose();
@@ -99,7 +115,10 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
   // picker is open. Guarded off for the duration of that dialog.
   bool _pickerOpen = false;
 
-  void _startEditing() => setState(() => _expanded = true);
+  void _startEditing() {
+    setState(() => _expanded = true);
+    _expandController.forward();
+  }
 
   void _cancelEditing() {
     if (_pickerOpen) return;
@@ -108,6 +127,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
       _expanded = false;
       _errorMessage = null;
     });
+    _expandController.reverse();
   }
 
   Future<void> _pickAvatar() async {
@@ -158,6 +178,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
         _saving = false;
         _expanded = false;
       });
+      _expandController.reverse();
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -196,10 +217,140 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
           children: [
             _buildHeaderRow(),
             const SizedBox(height: 12),
-            _expanded ? _buildExpanded() : _buildCollapsed(),
+            _buildAnimatedCard(),
           ],
         ),
       ),
+    );
+  }
+
+  /// Drives the card's collapsed<->expanded content and size from
+  /// [_expandController]'s own value (0=collapsed, 1=expanded) - no
+  /// AnimatedSwitcher. Opening plays a plain simultaneous crossfade.
+  /// Closing is deliberately sequenced: the expanded content fades out over
+  /// the value's descent from 1.0 to 0.55, then - only once it's fully gone
+  /// - the collapsed content (username) fades in over the descent from 0.45
+  /// to 0.0, with a small gap around the midpoint where neither is
+  /// rendered. Only one of the two is ever actually built at a time (not
+  /// both stacked at different opacities), so there's no possibility of the
+  /// incoming content being visually buried under a still-fading-but-not-
+  /// yet-gone outgoing one - the failure mode that made two earlier
+  /// attempts at this (composing curves through AnimatedSwitcher's own
+  /// per-entry animations) not actually show anything fading in, despite
+  /// the math looking right on paper.
+  ///
+  /// The avatar itself is the one piece excluded from all of this: it's the
+  /// only element whose position and size never change between the two
+  /// layouts, so it's built once, outside the animated part entirely,
+  /// staying visible and in place the whole time rather than fading out and
+  /// back in with everything else. Only its edit badge (expanded-only)
+  /// still fades with the rest of the expanded content.
+  Widget _buildAnimatedCard() {
+    return AnimatedBuilder(
+      animation: _expandController,
+      builder: (context, _) {
+        final t = _expandController.value;
+        final double expandedOpacity;
+        final double collapsedOpacity;
+        final bool showExpanded;
+        if (_expanded) {
+          expandedOpacity = t;
+          collapsedOpacity = 1 - t;
+          showExpanded = true;
+        } else {
+          expandedOpacity = ((t - 0.55) / 0.45).clamp(0.0, 1.0);
+          collapsedOpacity = ((0.45 - t) / 0.45).clamp(0.0, 1.0);
+          showExpanded = t > 0.45;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _buildAvatarArea(
+                  showEditBadge: showExpanded,
+                  badgeOpacity: expandedOpacity,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: showExpanded
+                      ? Opacity(
+                          opacity: expandedOpacity,
+                          child: _GlassTextField(
+                            controller: _nameController,
+                            label: 'Full Name',
+                            keyboardType: TextInputType.name,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        )
+                      : Opacity(
+                          opacity: collapsedOpacity,
+                          child: Text(
+                            _profile?.username ?? '',
+                            style: TextStyle(
+                              fontFamily: 'Manrope',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: showExpanded
+                  ? Opacity(
+                      opacity: expandedOpacity,
+                      child: _buildExpandedFormRest(),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAvatarArea({required bool showEditBadge, required double badgeOpacity}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        AvatarCircle(avatarId: _avatarId, displayName: _nameController.text, size: 56),
+        if (showEditBadge)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Opacity(
+              opacity: badgeOpacity,
+              child: GestureDetector(
+                onTap: _pickAvatar,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.stepsGreen,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.surface,
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.edit,
+                    size: 12,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black
+                        : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -239,137 +390,78 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget> {
     );
   }
 
-  Widget _buildCollapsed() {
-    return Row(
-      children: [
-        AvatarCircle(avatarId: _avatarId, displayName: _nameController.text, size: 56),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            _profile?.username ?? '',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+  /// Everything in the expanded form below the first row (which lives in
+  /// [_buildAnimatedCard] alongside the persistent avatar) - Username,
+  /// Age/Weight/Height, Gender, Description, and any error message.
+  Widget _buildExpandedFormRest() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _GlassTextField(
+            controller: _usernameController,
+            label: 'Username',
+            keyboardType: TextInputType.text,
+            onChanged: (_) => setState(() {}),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExpanded() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AvatarCircle(avatarId: _avatarId, displayName: _nameController.text, size: 56),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: GestureDetector(
-                    onTap: _pickAvatar,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.stepsGreen,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.surface,
-                          width: 2,
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.edit,
-                        size: 12,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.black
-                            : Colors.white,
-                      ),
-                    ),
-                  ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _GlassTextField(
+                  controller: _ageController,
+                  label: 'Age',
+                  suffix: 'yrs',
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
                 ),
-              ],
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _GlassTextField(
-                controller: _nameController,
-                label: 'Full Name',
-                keyboardType: TextInputType.name,
-                onChanged: (_) => setState(() {}),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _GlassTextField(
-          controller: _usernameController,
-          label: 'Username',
-          keyboardType: TextInputType.text,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _GlassTextField(
-                controller: _ageController,
-                label: 'Age',
-                suffix: 'yrs',
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _GlassTextField(
+                  controller: _weightController,
+                  label: 'Weight',
+                  suffix: 'kg',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _GlassTextField(
-                controller: _weightController,
-                label: 'Weight',
-                suffix: 'kg',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (_) => setState(() {}),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _GlassTextField(
+                  controller: _heightController,
+                  label: 'Height',
+                  suffix: 'cm',
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _GlassTextField(
-                controller: _heightController,
-                label: 'Height',
-                suffix: 'cm',
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _buildGenderDisplay(),
-        const SizedBox(height: 12),
-        _GlassTextField(
-          controller: _descriptionController,
-          label: 'Description',
-          keyboardType: TextInputType.multiline,
-          maxLines: 3,
-          onChanged: (_) => setState(() {}),
-        ),
-        if (_errorMessage != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            _errorMessage!,
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.error,
-            ),
+            ],
           ),
+          const SizedBox(height: 12),
+          _buildGenderDisplay(),
+          const SizedBox(height: 12),
+          _GlassTextField(
+            controller: _descriptionController,
+            label: 'Description',
+            keyboardType: TextInputType.multiline,
+            maxLines: 3,
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage!,
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 

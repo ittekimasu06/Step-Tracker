@@ -4,12 +4,17 @@ import 'package:sizer/sizer.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_export.dart';
+import '../services/background_step_service.dart';
 import '../widgets/custom_error_widget.dart';
 import './providers/auth_provider.dart';
 import './providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configuration only - doesn't touch permissions or start anything itself
+  // (see background_step_service.dart's doc), so safe this early.
+  await initializeStepTrackingService();
 
   final authProvider = AuthProvider();
   final themeProvider = ThemeProvider();

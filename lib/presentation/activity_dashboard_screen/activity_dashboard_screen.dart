@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -9,7 +12,6 @@ import '../../services/activity_estimator.dart';
 import '../../services/hourly_step_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/step_service.dart';
-import '../../services/step_tracker.dart';
 import '../../theme/app_theme.dart';
 import './widgets/activity_ring_widget.dart';
 import './widgets/date_navigation_widget.dart';
@@ -30,41 +32,102 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     with WidgetsBindingObserver {
   DateTime _selectedDate = DateTime.now();
 
-  late final StepTracker _stepTracker;
-  StreamSubscription<int>? _stepsSubscription;
-  StreamSubscription<int>? _activeMinutesSubscription;
+  StreamSubscription? _activitySubscription;
+  StreamSubscription? _statusSubscription;
   StreamSubscription<UserProfile>? _profileSubscription;
   int? _todaySteps;
   int? _todayActiveMinutes;
+  // Today's hourly steps/active-minutes, bridged live from the background
+  // tracking service's 'activityUpdate' broadcast (see
+  // background_step_service.dart) - replaces the old direct
+  // StepTracker.hourlyStepsToday/.hourlyActiveMinutesToday getters now that
+  // this screen no longer owns a StepTracker instance itself.
+  Map<int, int> _hourlySteps = {};
+  Map<int, int> _hourlyActiveMinutes = {};
+  bool _permissionDenied = false;
+  // Guards the one-time backend seed fetch below from ever overwriting an
+  // already-live value if its network response is slow to come back.
+  bool _hasLiveUpdate = false;
   UserProfile? _profile;
 
   // Real per-day entries for dates other than today, fetched on demand from
   // the backend and cached by "yyyy-MM-dd" - see _ensureDateFetched. Today
-  // itself is never stored here; it always comes from the live StepTracker
-  // streams above instead, same as before.
+  // itself is never stored here; it always comes from the background
+  // tracking service's live broadcast instead, same as before.
   final Map<String, Map<String, dynamic>> _fetchedDayData = {};
 
   // Real hourly entries for dates other than today, fetched on demand from
   // the backend and cached by "yyyy-MM-dd" - see _ensureHourlyFetched. Today
-  // itself is never stored here; it always comes from the live StepTracker
-  // maps instead. Only populated for dates within kHourlyRetentionDays -
-  // the backend purges hourly detail older than that.
+  // itself is never stored here; it always comes from the live _hourlySteps/
+  // _hourlyActiveMinutes fields instead. Only populated for dates within
+  // kHourlyRetentionDays - the backend purges hourly detail older than that.
   final Map<String, List<Map<String, dynamic>>> _fetchedHourlyData = {};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _stepTracker = StepTracker();
-    _stepTracker.start();
-    _stepsSubscription = _stepTracker.todaySteps.listen((steps) {
-      if (mounted) setState(() => _todaySteps = steps);
+
+    _activitySubscription =
+        FlutterBackgroundService().on('activityUpdate').listen((event) {
+      if (!mounted || event == null) return;
+      _hasLiveUpdate = true;
+      setState(() {
+        _todaySteps = event['steps'] as int;
+        _todayActiveMinutes = event['activeMinutes'] as int;
+        _hourlySteps = (event['hourlySteps'] as Map).map(
+          (k, v) => MapEntry(int.parse(k as String), v as int),
+        );
+        _hourlyActiveMinutes = (event['hourlyActiveMinutes'] as Map).map(
+          (k, v) => MapEntry(int.parse(k as String), v as int),
+        );
+      });
     });
-    _activeMinutesSubscription = _stepTracker.todayActiveMinutes.listen((
-      minutes,
-    ) {
-      if (mounted) setState(() => _todayActiveMinutes = minutes);
+    _statusSubscription =
+        FlutterBackgroundService().on('trackerStatus').listen((event) {
+      if (!mounted || event == null) return;
+      setState(() => _permissionDenied = event['permissionDenied'] as bool);
     });
+    _requestPermissionsAndStartTracking();
+
+    // One-time seed for the very first paint, before any background-service
+    // broadcast has arrived - _hasLiveUpdate guards against a slow response
+    // here ever overwriting an already-live value. Necessary even beyond
+    // that first paint: if the background service was *already* running
+    // from a previous session (the common case - it isn't stopped just by
+    // closing the app), _requestPermissionsAndStartTracking's startService()
+    // call above is a no-op (isRunning() already true), so StepTracker.start
+    // never re-runs and never re-broadcasts anything - the dashboard would
+    // otherwise show nothing until the next real step event, which could be
+    // a while. This seed is what makes reopening the app show correct data
+    // immediately regardless of whether the service needed to (re)start.
+    StepService.instance.fetchDailyEntry(DateTime.now()).then((entry) {
+      if (!mounted || _hasLiveUpdate || entry == null) return;
+      setState(() {
+        _todaySteps = entry.stepCount;
+        _todayActiveMinutes = entry.activeMinutes;
+      });
+    });
+
+    // Same reasoning, for the hourly maps that drive the charts/weekly
+    // strip/calorie estimate - there was previously no independent seed for
+    // these at all, only ever set from a background-service broadcast, which
+    // (per the reasoning above) may not arrive again until the next real
+    // step event even on an otherwise-normal reopen.
+    HourlyStepService.instance.fetchHourlyEntries(DateTime.now()).then((entries) {
+      if (!mounted || _hasLiveUpdate || entries == null) return;
+      final steps = <int, int>{};
+      final activeMinutes = <int, int>{};
+      for (final e in entries) {
+        steps[e.hour] = e.stepCount;
+        activeMinutes[e.hour] = e.activeMinutes;
+      }
+      setState(() {
+        _hourlySteps = steps;
+        _hourlyActiveMinutes = activeMinutes;
+      });
+    });
+
     ProfileService.instance.fetchProfile().then((profile) {
       if (mounted) setState(() => _profile = profile);
     });
@@ -93,11 +156,12 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _stepsSubscription?.cancel();
-    _activeMinutesSubscription?.cancel();
+    _activitySubscription?.cancel();
+    _statusSubscription?.cancel();
     _profileSubscription?.cancel();
-    _stepTracker.pushNow();
-    _stepTracker.dispose();
+    // No pushNow()/tracker.dispose() here anymore - the tracker now lives in
+    // the background service and outlives this widget by design; it keeps
+    // running (and syncing on its own 30s timer) after this screen is gone.
     super.dispose();
   }
 
@@ -105,8 +169,53 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _stepTracker.pushNow();
+      // Fire-and-forget nudge for a prompt sync on backgrounding - the
+      // service's own periodic timer is the real backstop regardless.
+      if (!kIsWeb && Platform.isAndroid) {
+        FlutterBackgroundService().invoke('sync');
+      }
     }
+  }
+
+  /// Requests the permissions the background tracking service needs
+  /// (matching today's existing UX of prompting once the user reaches the
+  /// dashboard, not earlier in the boot sequence), then starts the service
+  /// if not already running. Android only - see background_step_service.dart's
+  /// doc for why iOS is out of scope.
+  Future<void> _requestPermissionsAndStartTracking() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+
+    final activityStatus = await Permission.activityRecognition.request();
+    if (!mounted) return;
+    if (!activityStatus.isGranted) {
+      setState(() => _permissionDenied = true);
+      return;
+    }
+    // Android 13+ only - permission_handler treats this as already-granted
+    // on older versions where notifications aren't a runtime permission.
+    await Permission.notification.request();
+
+    if (!(await FlutterBackgroundService().isRunning())) {
+      await FlutterBackgroundService().startService();
+    }
+  }
+
+  /// Bridges RefreshIndicator's awaitable contract to the background
+  /// service's fire-and-forget invoke()/on() messaging: nudges an immediate
+  /// sync and waits for its 'syncComplete' reply, falling back to a short
+  /// timeout in case the service isn't running.
+  Future<void> _handleRefresh() {
+    final completer = Completer<void>();
+    late final StreamSubscription sub;
+    sub = FlutterBackgroundService().on('syncComplete').listen((_) {
+      if (!completer.isCompleted) completer.complete();
+      sub.cancel();
+    });
+    FlutterBackgroundService().invoke('sync');
+    return completer.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => sub.cancel(),
+    );
   }
 
   bool _isToday(DateTime date) {
@@ -207,7 +316,8 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
 
   /// Fetches and caches a non-today date's real entry from the backend, if
   /// not already resolved. Today is intentionally never cached here - it
-  /// always comes from the live [_stepTracker] streams instead.
+  /// always comes from the background tracking service's live broadcast
+  /// instead (see [_activitySubscription]).
   Future<void> _ensureDateFetched(DateTime date) async {
     if (_isToday(date)) return;
     final dateStr = _formatDate(date);
@@ -225,12 +335,12 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     });
   }
 
-  /// Today's steps and active minutes come live from [_stepTracker]; every
-  /// other date is fetched on demand from the real backend (see
-  /// [_ensureDateFetched]) and cached in [_fetchedDayData] - null here means
-  /// "not resolved yet" (about to be fetched, or a fetch is in flight), not
-  /// "confirmed no data". The hourly breakdown chart still uses mock data,
-  /// tracked as a separate, larger follow-up.
+  /// Today's steps and active minutes come live from the background tracking
+  /// service; every other date is fetched on demand from the real backend
+  /// (see [_ensureDateFetched]) and cached in [_fetchedDayData] - null here
+  /// means "not resolved yet" (about to be fetched, or a fetch is in
+  /// flight), not "confirmed no data". The hourly breakdown chart still uses
+  /// mock data, tracked as a separate, larger follow-up.
   Map<String, dynamic>? get _todayData {
     if (_isToday(_selectedDate)) {
       return _buildDayData(
@@ -238,8 +348,8 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
         steps: _todaySteps ?? 0,
         activeMinutes: _todayActiveMinutes ?? 0,
         isToday: true,
-        hourlySteps: _stepTracker.hourlyStepsToday,
-        hourlyActiveMinutes: _stepTracker.hourlyActiveMinutesToday,
+        hourlySteps: _hourlySteps,
+        hourlyActiveMinutes: _hourlyActiveMinutes,
       );
     }
 
@@ -261,8 +371,8 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
       isToday: true,
       steps: _todaySteps ?? 0,
       activeMinutes: _todayActiveMinutes ?? 0,
-      hourlySteps: _stepTracker.hourlyStepsToday,
-      hourlyActiveMinutes: _stepTracker.hourlyActiveMinutesToday,
+      hourlySteps: _hourlySteps,
+      hourlyActiveMinutes: _hourlyActiveMinutes,
     );
     return [todayEntry, ..._fetchedDayData.values];
   }
@@ -303,7 +413,8 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
 
   /// Fetches and caches a non-today date's hourly entries, if within the
   /// retention window and not already resolved. Today always comes live from
-  /// [_stepTracker] instead; dates outside the window are never fetched.
+  /// the background tracking service instead; dates outside the window are
+  /// never fetched.
   Future<void> _ensureHourlyFetched(DateTime date) async {
     if (_isToday(date)) return;
     if (_daysAgo(date) >= kHourlyRetentionDays) return;
@@ -329,8 +440,8 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
   List<Map<String, dynamic>>? get _selectedHourlyData {
     if (_isToday(_selectedDate)) {
       return _buildHourlyChartData(
-        _stepTracker.hourlyStepsToday,
-        _stepTracker.hourlyActiveMinutesToday,
+        _hourlySteps,
+        _hourlyActiveMinutes,
       );
     }
     final dateStr = _formatDate(_selectedDate);
@@ -416,13 +527,13 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     final hourlyAvailable = _hourlyDataAvailableForSelectedDate;
     final hourlyData = hourlyAvailable ? _selectedHourlyData : null;
     final showPermissionDeniedState =
-        _isToday(_selectedDate) && _stepTracker.permissionDenied;
+        _isToday(_selectedDate) && _permissionDenied;
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: _stepTracker.pushNow,
+          onRefresh: _handleRefresh,
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: _buildHeader(context)),

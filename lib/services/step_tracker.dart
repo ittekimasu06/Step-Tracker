@@ -103,10 +103,18 @@ const _maxHourSplitGap = Duration(hours: 2);
 /// that, a new device-wide `_globalCheckpointTime` records when the
 /// checkpoint was last at its previous value (paired with `_globalCheckpoint`
 /// itself, same persistence/re-read-fresh pattern), since it describes the
-/// physical sensor's cadence, not any one account. Active minutes don't need
-/// this: a credited minute is triggered by *recent* activity (the rolling
-/// window above is only 60s wide), so it can never represent a multi-hour-old
-/// gap - it's simply attributed to the hour of the event that credited it.
+/// physical sensor's cadence, not any one account. Active minutes credited
+/// from a live, continuously-streamed event never need this (the rolling
+/// window is only [kActiveWindowSeconds] wide, so a live-gated credit can
+/// never span more than one hour boundary in practice) - but a credit earned
+/// from a backgrounded-resume lump (see `_onActiveMinuteTick`'s gap branch)
+/// genuinely can cover a long real gap. Unlike steps, that credit is *not*
+/// proportionally split across the hours it spans - it's attributed entirely
+/// to the hour of the event that credited it, an accepted simplification
+/// (the millisecond-accumulator model that decides *how many* minutes to
+/// credit doesn't retain enough of the gap's internal timing to split them
+/// meaningfully, the way the step delta above can be split by simple
+/// elapsed-time proportion).
 ///
 /// Sync to the backend is foreground-only (a 30s timer plus a few explicit
 /// trigger points) - there is no background sync in v1.
@@ -177,14 +185,22 @@ class StepTracker {
   static DateTime? _parseTimestamp(String? iso) =>
       iso == null ? null : DateTime.tryParse(iso);
 
-  Future<void> start() async {
+  /// [requestPermission] must be `false` when called from the background
+  /// service's isolate (see `background_step_service.dart`) - `.request()`
+  /// needs a live Android `Activity` to host the permission dialog, which
+  /// doesn't exist there and throws a `PlatformException`. The UI isolate
+  /// (dashboard/auth) is the only place that should ever prompt; the
+  /// background isolate just checks whether it's already granted.
+  Future<void> start({bool requestPermission = true}) async {
     if (kIsWeb) {
       sensorUnavailable = true;
       return;
     }
 
     if (Platform.isAndroid) {
-      final status = await Permission.activityRecognition.request();
+      final status = requestPermission
+          ? await Permission.activityRecognition.request()
+          : await Permission.activityRecognition.status;
       if (!status.isGranted) {
         permissionDenied = true;
         return;
@@ -238,19 +254,24 @@ class StepTracker {
     _lastActiveEventTime = _parseTimestamp(_prefs!.getString(_lastActiveEventTimeKey));
     _activeMillisAccumulator = _prefs!.getInt(_activeMillisKey) ?? 0;
 
-    final seeded = await StepService.instance.fetchDailyEntry(DateTime.now(), token: _authToken);
-    if (seeded != null) {
-      _earnedSoFar = seeded.stepCount;
-      _activeMinutesSoFar = seeded.activeMinutes;
-      if (!_controller.isClosed) _controller.add(_earnedSoFar);
-      if (!_activeMinutesController.isClosed) {
-        _activeMinutesController.add(_activeMinutesSoFar);
-      }
-    }
-
-    // Reseed hourly detail from the backend too, for the same reason as the
-    // daily total above (recovers from reinstall/cleared storage) - the
-    // server's values fully replace, not merge with, the local seed.
+    // Reseed hourly detail from the backend *before* the daily seed below
+    // fires its stream broadcasts - deliberately reordered from an earlier
+    // version of this method, which did this the other way around. A plain
+    // getter-based UI (this class's original only consumer) wouldn't have
+    // cared about the order, since it re-reads hourlyStepsToday/
+    // hourlyActiveMinutesToday live at every rebuild regardless of which
+    // stream triggered it. But a listener that bridges these streams to a
+    // point-in-time snapshot payload (see background_step_service.dart's
+    // broadcastActivity, which reads those same getters synchronously inside
+    // the todaySteps/todayActiveMinutes listeners below) captures whatever
+    // they hold *at that exact moment* - if this reseed still ran after the
+    // daily seed's broadcasts, the very first snapshot sent to the UI would
+    // carry correct steps/active-minutes but empty hourly maps, only
+    // self-correcting on the next real sensor event. Confirmed via a real
+    // report: steps/active time displayed correctly, hourly charts stayed
+    // empty until the user walked more, which is the exact would-be
+    // signature. The server's hourly values fully replace, not merge with,
+    // the local seed above - recovers from reinstall/cleared storage.
     final hourlySeeded = await HourlyStepService.instance.fetchHourlyEntries(
       DateTime.now(),
       token: _authToken,
@@ -264,8 +285,18 @@ class StepTracker {
       }
     }
 
+    final seeded = await StepService.instance.fetchDailyEntry(DateTime.now(), token: _authToken);
+    if (seeded != null) {
+      _earnedSoFar = seeded.stepCount;
+      _activeMinutesSoFar = seeded.activeMinutes;
+      if (!_controller.isClosed) _controller.add(_earnedSoFar);
+      if (!_activeMinutesController.isClosed) {
+        _activeMinutesController.add(_activeMinutesSoFar);
+      }
+    }
+
     _subscription = Pedometer.stepCountStream.listen(
-      (event) => _onStepCount(event, today),
+      _onStepCount,
       onError: (_) {
         sensorUnavailable = true;
       },
@@ -274,7 +305,20 @@ class StepTracker {
     _syncTimer = Timer.periodic(_syncInterval, (_) => pushNow());
   }
 
-  void _onStepCount(StepCount event, String today) {
+  // Computing "today" once in start() and closing over that single value
+  // (the previous shape of this method, before the background-tracking
+  // service existed) was harmless when a StepTracker's lifetime was capped
+  // at one app session - the user reopening the app the next day always
+  // meant a brand new start() call with a freshly-computed value. Once the
+  // background service can run for days at a stretch without ever
+  // restarting, that stale captured value silently stopped being "today"
+  // the moment midnight passed, and the day-boundary reset below
+  // (`_earnedDate != today`) could never fire again - confirmed by a real
+  // report of steps/active minutes accumulating across a day boundary
+  // instead of resetting. Recomputed fresh from this event's own timestamp
+  // on every call instead.
+  void _onStepCount(StepCount event) {
+    final today = _formatDate(event.timeStamp);
     final cumulative = event.steps;
 
     if (_earnedDate != today) {
@@ -419,15 +463,40 @@ class StepTracker {
       }
     }
 
-    // Attribute the time since the previous accepted event to "active" time
-    // only while the trailing window is above cadence - capped at the window
-    // width so a long gap (app backgrounded, phone set down) can never be
-    // credited just because the window looked busy right before it. Bursts
-    // separated by rest still add up: the accumulator only resets by being
-    // spent on a whole credited minute, never by going idle in between.
-    if (stepsInWindow >= kActiveMinuteStepThreshold && _lastActiveEventTime != null) {
+    if (_lastActiveEventTime != null) {
       final elapsedMs = eventTime.difference(_lastActiveEventTime!).inMilliseconds;
-      _activeMillisAccumulator += elapsedMs.clamp(0, kActiveWindowSeconds * 1000);
+      if (elapsedMs <= kActiveWindowSeconds * 1000) {
+        // A live, continuously-streamed event (app in foreground) - gate on
+        // the trailing window's cadence exactly as always. Bursts separated
+        // by rest still add up: the accumulator only resets by being spent
+        // on a whole credited minute, never by going idle in between.
+        if (stepsInWindow >= kActiveMinuteStepThreshold) {
+          _activeMillisAccumulator += elapsedMs;
+        }
+      } else {
+        // This event arrived after a gap wider than the window - the app
+        // was backgrounded/closed and only just received one lump
+        // `StepCount` on resume (the OS sensor itself never stops counting,
+        // only this app's ability to *see* individual events while it isn't
+        // running does - see the class doc). The trailing window is
+        // meaningless here (it holds only this one sample, since every older
+        // sample aged out), so the old `stepsInWindow >= threshold` check
+        // degenerated into "did this lump have >= kActiveMinuteStepThreshold
+        // raw steps total", with no regard for how long the gap actually
+        // was - capping the credited time at just [kActiveWindowSeconds]
+        // regardless of delta size meant a genuine 20-minute walk with the
+        // app closed credited at most ~30s (often not even a whole minute).
+        // Gate on this delta's own average cadence over the *real* elapsed
+        // gap instead, and if it clears the same per-ms threshold, credit
+        // the actual elapsed time - capped at [_maxHourSplitGap] for the
+        // same reason step-hour attribution caps there: past that, there's
+        // no real basis for assuming the whole gap was continuous activity
+        // rather than a short burst right before reopening the app.
+        final thresholdPerMs = kActiveMinuteStepThreshold / (kActiveWindowSeconds * 1000);
+        if (delta / elapsedMs >= thresholdPerMs) {
+          _activeMillisAccumulator += elapsedMs.clamp(0, _maxHourSplitGap.inMilliseconds);
+        }
+      }
     }
     _lastActiveEventTime = eventTime;
 

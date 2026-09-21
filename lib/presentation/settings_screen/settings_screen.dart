@@ -1,4 +1,9 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -513,6 +518,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          const Divider(height: 16),
+          InkWell(
+            onTap: () => _showCloseAppDialog(context),
+            borderRadius: BorderRadius.circular(10),
+            splashColor: error.withAlpha(26),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: error.withAlpha(38),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.power_settings_new_rounded,
+                      color: error,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Close App',
+                          style: TextStyle(
+                            fontFamily: 'Manrope',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: error,
+                          ),
+                        ),
+                        Text(
+                          'Stop background activity tracking and exit',
+                          style: TextStyle(
+                            fontFamily: 'Manrope',
+                            fontSize: 11,
+                            color: AppTheme.textSecondary(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.textMuted(context),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -759,6 +820,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  void _showCloseAppDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Close App?',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontWeight: FontWeight.w700,
+            color: Theme.of(ctx).colorScheme.onSurface,
+          ),
+        ),
+        content: Text(
+          'This stops background activity tracking and exits the app. '
+          'Reopening the app resumes tracking.',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 13,
+            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                color: AppTheme.textSecondary(ctx),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _closeApp();
+            },
+            child: Text(
+              'Close App',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                color: Theme.of(ctx).colorScheme.error,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Stops the background tracking service (same 'stop' event AuthProvider
+  /// sends on sign-out) before exiting, so nothing keeps running after the
+  /// user has explicitly asked to close the app - reopening it later starts
+  /// tracking again on its own, same as any other fresh launch.
+  void _closeApp() {
+    if (!kIsWeb && Platform.isAndroid) {
+      FlutterBackgroundService().invoke('stop');
+    }
+    SystemNavigator.pop();
   }
 }
 
