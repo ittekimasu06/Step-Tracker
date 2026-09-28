@@ -4,10 +4,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../routes/app_routes.dart';
 import '../../services/activity_estimator.dart';
 import '../../services/hourly_step_service.dart';
 import '../../services/profile_service.dart';
@@ -758,14 +756,6 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
               color: AppTheme.textBright(context),
             ),
             onPressed: () => _pickDate(context),
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.settings_outlined,
-              size: 22,
-              color: AppTheme.textBright(context),
-            ),
-            onPressed: () => context.go(AppRoutes.settingsScreen),
           ),
         ],
       ),

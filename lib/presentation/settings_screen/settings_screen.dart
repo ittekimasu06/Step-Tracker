@@ -14,12 +14,12 @@ import '../../services/activity_estimator.dart';
 import '../../services/api_client.dart';
 import '../../services/profile_service.dart';
 import '../../services/settings_dirty_state.dart';
+import '../../services/step_tracker.dart';
 import '../../theme/app_theme.dart';
 import './widgets/appearance_settings_widget.dart';
 import './widgets/goal_settings_widget.dart';
 import './widgets/notification_settings_widget.dart';
 import './widgets/profile_settings_widget.dart';
-import './widgets/units_settings_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -38,7 +38,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // either group exists), but still tracked for dirty-state/Save purposes to
   // match what this button visually appears to cover; a pre-existing gap,
   // not something this phase introduces or fixes.
-  bool _useMetric = true;
   bool _goalReminders = true;
   bool _morningReminder = true;
   bool _eveningReminder = false;
@@ -56,7 +55,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     stepGoal: kDefaultStepGoal,
     activeTimeGoal: kDefaultActiveMinutesGoal,
     calorieGoal: kDefaultCalorieGoal,
-    useMetric: true,
     goalReminders: true,
     morningReminder: true,
     eveningReminder: false,
@@ -67,7 +65,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _stepGoal != _lastSaved.stepGoal ||
       _activeTimeGoal != _lastSaved.activeTimeGoal ||
       _calorieGoal != _lastSaved.calorieGoal ||
-      _useMetric != _lastSaved.useMetric ||
       _goalReminders != _lastSaved.goalReminders ||
       _morningReminder != _lastSaved.morningReminder ||
       _eveningReminder != _lastSaved.eveningReminder ||
@@ -95,7 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _stepGoal = _lastSaved.stepGoal;
       _activeTimeGoal = _lastSaved.activeTimeGoal;
       _calorieGoal = _lastSaved.calorieGoal;
-      _useMetric = _lastSaved.useMetric;
       _goalReminders = _lastSaved.goalReminders;
       _morningReminder = _lastSaved.morningReminder;
       _eveningReminder = _lastSaved.eveningReminder;
@@ -108,7 +104,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       stepGoal: _stepGoal,
       activeTimeGoal: _activeTimeGoal,
       calorieGoal: _calorieGoal,
-      useMetric: _useMetric,
       goalReminders: _goalReminders,
       morningReminder: _morningReminder,
       eveningReminder: _eveningReminder,
@@ -228,15 +223,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: AppearanceSettingsWidget(
                   themeMode: themeProvider.themeMode,
                   onThemeModeChanged: themeProvider.setThemeMode,
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: UnitsSettingsWidget(
-                  useMetric: _useMetric,
-                  onUnitChanged: (v) => setState(() => _useMetric = v),
                 ),
               ),
             ),
@@ -879,8 +865,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// sends on sign-out) before exiting, so nothing keeps running after the
   /// user has explicitly asked to close the app - reopening it later starts
   /// tracking again on its own, same as any other fresh launch.
-  void _closeApp() {
+  ///
+  /// Marks the pause as explicit first (see StepTracker.markExplicitlyPaused)
+  /// so steps/active time that accumulate while the app is closed this way
+  /// don't get silently backfilled once tracking resumes - unlike an
+  /// involuntary gap (OS-killed service), which still should be, via the
+  /// existing gap-estimation fallback.
+  Future<void> _closeApp() async {
     if (!kIsWeb && Platform.isAndroid) {
+      await StepTracker.markExplicitlyPaused();
       FlutterBackgroundService().invoke('stop');
     }
     SystemNavigator.pop();
@@ -893,7 +886,6 @@ class _GoalsSnapshot {
   final int stepGoal;
   final int activeTimeGoal;
   final int calorieGoal;
-  final bool useMetric;
   final bool goalReminders;
   final bool morningReminder;
   final bool eveningReminder;
@@ -903,7 +895,6 @@ class _GoalsSnapshot {
     required this.stepGoal,
     required this.activeTimeGoal,
     required this.calorieGoal,
-    required this.useMetric,
     required this.goalReminders,
     required this.morningReminder,
     required this.eveningReminder,
