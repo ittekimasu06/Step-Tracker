@@ -14,7 +14,6 @@ import '../../services/activity_estimator.dart';
 import '../../services/api_client.dart';
 import '../../services/profile_service.dart';
 import '../../services/settings_dirty_state.dart';
-import '../../services/step_tracker.dart';
 import '../../theme/app_theme.dart';
 import './widgets/appearance_settings_widget.dart';
 import './widgets/goal_settings_widget.dart';
@@ -864,16 +863,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Stops the background tracking service (same 'stop' event AuthProvider
   /// sends on sign-out) before exiting, so nothing keeps running after the
   /// user has explicitly asked to close the app - reopening it later starts
-  /// tracking again on its own, same as any other fresh launch.
-  ///
-  /// Marks the pause as explicit first (see StepTracker.markExplicitlyPaused)
-  /// so steps/active time that accumulate while the app is closed this way
-  /// don't get silently backfilled once tracking resumes - unlike an
-  /// involuntary gap (OS-killed service), which still should be, via the
-  /// existing gap-estimation fallback.
-  Future<void> _closeApp() async {
+  /// tracking again on its own (re-baselining rather than backfilling the
+  /// gap - see StepTracker.start's doc), same as any other fresh launch.
+  void _closeApp() {
     if (!kIsWeb && Platform.isAndroid) {
-      await StepTracker.markExplicitlyPaused();
       FlutterBackgroundService().invoke('stop');
     }
     SystemNavigator.pop();

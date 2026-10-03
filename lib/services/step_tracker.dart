@@ -23,11 +23,6 @@ const _windowSamplesKey = 'active_minute_window_samples';
 const _lastActiveEventTimeKey = 'active_minute_last_event_time';
 const _activeMillisKey = 'active_minute_millis_accumulator';
 const _hourlyDataKeyPrefix = 'hourly_data_';
-// Deliberately not namespaced by account, same reasoning as
-// _globalCheckpointKey: it's a device-wide instruction for "the next
-// StepTracker.start(), whoever runs it, should re-baseline instead of
-// crediting the gap" - see markExplicitlyPaused's doc.
-const _explicitPauseKey = 'step_tracking_explicitly_paused';
 
 /// Beyond this, a lump step delta (app backgrounded/closed for a while) is no
 /// longer split proportionally across hours - see `_attributeDeltaToHours`.
@@ -140,24 +135,6 @@ const _maxHourSplitGap = Duration(hours: 2);
 /// always land under the account that actually generated the data, no matter
 /// how long it lingers or what the ambient signed-in session becomes later.
 class StepTracker {
-  /// Call before a *deliberate* stop of tracking (the Danger Zone "Close
-  /// App" button, sign-out) - never for a stop the user didn't ask for
-  /// (the OS killing the background service, a crash). Marks that the next
-  /// `start()`, whenever and by whichever account it happens, should
-  /// re-baseline from the sensor's current reading rather than crediting
-  /// whatever accumulated in the meantime as a gap - i.e. steps/active time
-  /// during a deliberate pause don't get silently backfilled once tracking
-  /// resumes, unlike an involuntary gap (killed service, phone off), which
-  /// still should - and, via the existing gap-estimation fallback, still
-  /// does. Static and awaitable independently of any `StepTracker`
-  /// instance existing, since the caller (Settings, sign-out) may run in
-  /// the UI isolate while the tracker itself only ever lives in the
-  /// background one.
-  static Future<void> markExplicitlyPaused() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_explicitPauseKey, true);
-  }
-
   final _controller = StreamController<int>.broadcast();
   final _activeMinutesController = StreamController<int>.broadcast();
   StreamSubscription<StepCount>? _subscription;
@@ -269,32 +246,46 @@ class StepTracker {
       }
     }
 
-    // A deliberate pause (see markExplicitlyPaused) wipes every piece of
-    // device-wide sensor-derived state below *before* it's read, so the
-    // upcoming first event re-baselines (delta=0, same path as a device
-    // reboot) instead of crediting whatever the sensor accumulated during
-    // the pause as a gap. Clearing _lastActiveEventTimeKey/_windowSamplesKey/
+    // start() only ever (re)runs when the service genuinely wasn't running -
+    // an ordinary UI close/reopen never stops it, so reaching this point at
+    // all means tracking actually went through a real stop, whether
+    // deliberate (Close App, sign-out) or involuntary (the OS/OEM battery
+    // manager killing the foreground service - confirmed via on-device
+    // dumpsys to happen periodically on real hardware even with
+    // isForegroundMode + the health service type). Either way, wipe every
+    // piece of device-wide sensor-derived state below *before* it's read, so
+    // the upcoming first event re-baselines (delta=0, same path as a device
+    // reboot) instead of crediting whatever the sensor accumulated during the
+    // gap as a backfill. Clearing _lastActiveEventTimeKey/_windowSamplesKey/
     // _activeMillisKey too, not just the step checkpoint, matters just as
     // much: leaving a stale _lastActiveEventTime in place would make the
     // *next* real event after resuming compute its elapsed-since-last-event
-    // gap across the entire pause anyway, silently reintroducing exactly
+    // gap across the entire downtime anyway, silently reintroducing exactly
     // the credit this is meant to suppress.
-    if (_prefs!.getBool(_explicitPauseKey) ?? false) {
-      await _prefs!.remove(_globalCheckpointKey);
-      await _prefs!.remove(_globalCheckpointTimeKey);
-      await _prefs!.remove(_lastActiveEventTimeKey);
-      await _prefs!.remove(_windowSamplesKey);
-      await _prefs!.remove(_activeMillisKey);
-      await _prefs!.setBool(_explicitPauseKey, false);
-    }
-
-    // Deliberately NOT namespaced - shared across every account on this
-    // device, so it reflects the sensor's true position regardless of who
-    // was being tracked when it last moved. See the class doc.
-    _globalCheckpoint = _prefs!.getInt(_globalCheckpointKey);
-    _globalCheckpointTime = _parseTimestamp(_prefs!.getString(_globalCheckpointTimeKey));
-    _lastActiveEventTime = _parseTimestamp(_prefs!.getString(_lastActiveEventTimeKey));
-    _activeMillisAccumulator = _prefs!.getInt(_activeMillisKey) ?? 0;
+    //
+    // This used to only run for a deliberate stop (an earlier,
+    // now-removed `markExplicitlyPaused` flag gated it), leaving an
+    // involuntary gap to fall through to the gap-estimation fallback in
+    // `_onActiveMinuteTick` instead. That let steps (recovered exactly, via
+    // the sensor's own cumulative count) and active minutes (recovered only
+    // as a cadence *estimate*, which a long idle gap easily dilutes to zero)
+    // visibly disagree after the same restart - confirmed on-device: a
+    // Samsung battery-killed overnight restart backfilled real steps but
+    // credited zero active minutes/calories for the same gap. Explicitly
+    // chosen over keeping the accurate step backfill: discarding a real,
+    // exactly-known step delta is worse data than not having it, but a
+    // metric that's sometimes retroactively right and sometimes silently
+    // wrong depending on gap shape is worse UX than one that's consistently
+    // "doesn't count time it wasn't actually watching."
+    await _prefs!.remove(_globalCheckpointKey);
+    await _prefs!.remove(_globalCheckpointTimeKey);
+    await _prefs!.remove(_lastActiveEventTimeKey);
+    await _prefs!.remove(_windowSamplesKey);
+    await _prefs!.remove(_activeMillisKey);
+    _globalCheckpoint = null;
+    _globalCheckpointTime = null;
+    _lastActiveEventTime = null;
+    _activeMillisAccumulator = 0;
 
     // Reseed hourly detail from the backend *before* the daily seed below
     // fires its stream broadcasts - deliberately reordered from an earlier

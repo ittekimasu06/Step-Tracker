@@ -8,7 +8,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
-import '../services/step_tracker.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService.instance;
@@ -169,7 +168,7 @@ class AuthProvider extends ChangeNotifier {
     _setError(null);
     try {
       await _authService.signOut();
-      await _stopBackgroundTracking();
+      _stopBackgroundTracking();
       _isAuthenticated = false;
       notifyListeners();
     } catch (e) {
@@ -179,16 +178,8 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Stops tracking and marks the stop as deliberate (see
-  /// StepTracker.markExplicitlyPaused) - same reasoning as the Settings
-  /// "Close App" button: sign-out is just as much a deliberate "turn
-  /// tracking off" as closing the app is, so steps/active time that
-  /// accumulate while signed out shouldn't be silently backfilled once
-  /// tracking resumes, whether that's this same account signing back in or
-  /// a different one on the same device.
-  Future<void> _stopBackgroundTracking() async {
+  void _stopBackgroundTracking() {
     if (kIsWeb || !Platform.isAndroid) return;
-    await StepTracker.markExplicitlyPaused();
     FlutterBackgroundService().invoke('stop');
   }
 
@@ -198,7 +189,7 @@ class AuthProvider extends ChangeNotifier {
     _setError(null);
     try {
       await _authService.deleteAccount();
-      await _stopBackgroundTracking();
+      _stopBackgroundTracking();
       _isAuthenticated = false;
       notifyListeners();
       return true;
