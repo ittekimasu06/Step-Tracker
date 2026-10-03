@@ -3,22 +3,14 @@ import '../../../theme/app_theme.dart';
 
 class NotificationSettingsWidget extends StatelessWidget {
   final bool goalReminders;
-  final bool morningReminder;
-  final bool eveningReminder;
   final bool vibrationFeedback;
   final ValueChanged<bool> onGoalRemindersChanged;
-  final ValueChanged<bool> onMorningChanged;
-  final ValueChanged<bool> onEveningChanged;
   final ValueChanged<bool> onVibrationChanged;
 
   const NotificationSettingsWidget({
     required this.goalReminders,
-    required this.morningReminder,
-    required this.eveningReminder,
     required this.vibrationFeedback,
     required this.onGoalRemindersChanged,
-    required this.onMorningChanged,
-    required this.onEveningChanged,
     required this.onVibrationChanged,
     super.key,
   });
@@ -47,28 +39,10 @@ class NotificationSettingsWidget extends StatelessWidget {
           ),
           _divider(context),
           _ToggleRow(
-            icon: Icons.wb_sunny_outlined,
-            iconColor: AppTheme.stepsGreen,
-            title: 'Morning Check-in',
-            subtitle: 'Daily nudge at 7:00 AM',
-            value: morningReminder,
-            onChanged: onMorningChanged,
-          ),
-          _divider(context),
-          _ToggleRow(
-            icon: Icons.nights_stay_outlined,
-            iconColor: AppTheme.activeBlue,
-            title: 'Evening Summary',
-            subtitle: 'End-of-day recap at 9:00 PM',
-            value: eveningReminder,
-            onChanged: onEveningChanged,
-          ),
-          _divider(context),
-          _ToggleRow(
             icon: Icons.vibration_rounded,
             iconColor: AppTheme.caloriesPurple,
-            title: 'Haptic Feedback',
-            subtitle: 'Vibrate on goal milestones',
+            title: 'Goal completed',
+            subtitle: 'Vibrate and notify when you reach a daily goal',
             value: vibrationFeedback,
             onChanged: onVibrationChanged,
           ),

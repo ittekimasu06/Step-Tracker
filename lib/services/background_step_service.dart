@@ -2,6 +2,11 @@ import 'dart:ui';
 
 import 'package:flutter_background_service/flutter_background_service.dart';
 
+import 'activity_estimator.dart';
+import 'api_client.dart';
+import 'auth_service.dart';
+import 'goal_notifications_service.dart';
+import 'profile_service.dart';
 import 'step_tracker.dart';
 
 /// Configures the Android foreground service that keeps [StepTracker] running
@@ -79,6 +84,24 @@ void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
   final tracker = StepTracker();
+  final goalNotifier = GoalNotificationsService();
+  await goalNotifier.init();
+
+  // Fetched independently here rather than via tracker.authToken, so goals
+  // are already in hand *before* subscribing below - the seed broadcast
+  // fired synchronously partway through tracker.start() (see the comment on
+  // the listen() calls below) can otherwise race a same-isolate profile
+  // fetch kicked off only after that point, risking the very first
+  // goal-threshold check running against kDefault* placeholders instead of
+  // the signed-in user's real goals. Mirrors StepTracker's own token capture
+  // (see its class doc) rather than reading the token off the tracker, for
+  // exactly that ordering reason - not because the two could ever actually
+  // disagree.
+  final token = await ApiClient.instance.getToken();
+  final accountKey =
+      (token != null ? AuthService.instance.emailFromToken(token) : null) ??
+      'anonymous';
+  final profile = await ProfileService.instance.fetchProfile(token: token);
 
   // Broadcasts everything the dashboard needs (steps, active minutes, and
   // both hourly maps) as one merged event on either stream firing, rather
@@ -107,6 +130,28 @@ void onStart(ServiceInstance service) async {
     });
   }
 
+  // Fire-and-forget on every update, same as broadcastActivity - cheap
+  // (a few SharedPreferences reads/writes, see GoalNotificationsService),
+  // and each goal only ever actually fires its "almost"/"completed"
+  // notification once per day regardless of how often this runs.
+  void checkGoals() {
+    final calories = ActivityEstimator.sumHourlyActivityCalories(
+      tracker.hourlyStepsToday,
+      tracker.hourlyActiveMinutesToday,
+      weightKg: profile?.weightKg,
+      heightCm: profile?.heightCm,
+    );
+    goalNotifier.checkGoals(
+      accountKey: accountKey,
+      steps: lastSteps,
+      stepGoal: profile?.stepGoal ?? kDefaultStepGoal,
+      activeMinutes: lastActiveMinutes,
+      activeGoal: profile?.activeMinutesGoal ?? kDefaultActiveMinutesGoal,
+      calories: calories,
+      calorieGoal: profile?.calorieGoal ?? kDefaultCalorieGoal,
+    );
+  }
+
   // Subscribed BEFORE start() is awaited, deliberately - start()'s own
   // backend seed fetch calls todaySteps/todayActiveMinutes's underlying
   // StreamController.add() synchronously partway through its execution
@@ -122,10 +167,12 @@ void onStart(ServiceInstance service) async {
   tracker.todaySteps.listen((steps) {
     lastSteps = steps;
     broadcastActivity();
+    checkGoals();
   });
   tracker.todayActiveMinutes.listen((minutes) {
     lastActiveMinutes = minutes;
     broadcastActivity();
+    checkGoals();
   });
 
   // Never .request() here - there's no Android Activity in this isolate to

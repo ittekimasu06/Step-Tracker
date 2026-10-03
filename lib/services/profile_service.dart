@@ -125,9 +125,12 @@ class ProfileService {
   Stream<UserProfile> get profileUpdates => _updatesController.stream;
 
   /// Fetch the current user's profile.
-  Future<UserProfile?> fetchProfile() async {
+  ///
+  /// [token], if given, pins this request to that exact account instead of
+  /// whoever is currently signed in - see [StepTracker].
+  Future<UserProfile?> fetchProfile({String? token}) async {
     try {
-      final data = await _api.get('/profile');
+      final data = await _api.get('/profile', token: token);
       return UserProfile.fromJson(data);
     } on ApiException {
       return null;

@@ -12,6 +12,7 @@ import '../../providers/theme_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/activity_estimator.dart';
 import '../../services/api_client.dart';
+import '../../services/goal_notifications_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/settings_dirty_state.dart';
 import '../../theme/app_theme.dart';
@@ -33,14 +34,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _activeTimeGoal = kDefaultActiveMinutesGoal;
   int _calorieGoal = kDefaultCalorieGoal;
 
-  // Preferences - not yet actually persisted anywhere (no backend field for
-  // either group exists), but still tracked for dirty-state/Save purposes to
-  // match what this button visually appears to cover; a pre-existing gap,
-  // not something this phase introduces or fixes.
+  // Notification toggles - unlike Goals below, these take effect immediately
+  // on tap (persisted straight to SharedPreferences via
+  // GoalNotificationsService, read directly by the background service's
+  // goal-threshold checks) rather than being staged behind the global Save
+  // button, matching how Appearance's theme toggle already behaves in this
+  // screen. Loaded once in _loadNotificationPrefs, not part of
+  // [_GoalsSnapshot]/[_hasUnsavedChanges] at all.
   bool _goalReminders = true;
-  bool _morningReminder = true;
-  bool _eveningReminder = false;
-  bool _vibrationFeedback = true;
+  bool _goalCompletedEnabled = true;
 
   bool _isSavingProfile = false;
 
@@ -54,25 +56,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     stepGoal: kDefaultStepGoal,
     activeTimeGoal: kDefaultActiveMinutesGoal,
     calorieGoal: kDefaultCalorieGoal,
-    goalReminders: true,
-    morningReminder: true,
-    eveningReminder: false,
-    vibrationFeedback: true,
   );
 
   bool get _hasUnsavedChanges =>
       _stepGoal != _lastSaved.stepGoal ||
       _activeTimeGoal != _lastSaved.activeTimeGoal ||
-      _calorieGoal != _lastSaved.calorieGoal ||
-      _goalReminders != _lastSaved.goalReminders ||
-      _morningReminder != _lastSaved.morningReminder ||
-      _eveningReminder != _lastSaved.eveningReminder ||
-      _vibrationFeedback != _lastSaved.vibrationFeedback;
+      _calorieGoal != _lastSaved.calorieGoal;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadNotificationPrefs();
     SettingsDirtyState.instance.registerDiscardHandler(_discardChanges);
   }
 
@@ -91,10 +86,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _stepGoal = _lastSaved.stepGoal;
       _activeTimeGoal = _lastSaved.activeTimeGoal;
       _calorieGoal = _lastSaved.calorieGoal;
-      _goalReminders = _lastSaved.goalReminders;
-      _morningReminder = _lastSaved.morningReminder;
-      _eveningReminder = _lastSaved.eveningReminder;
-      _vibrationFeedback = _lastSaved.vibrationFeedback;
     });
   }
 
@@ -103,10 +94,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       stepGoal: _stepGoal,
       activeTimeGoal: _activeTimeGoal,
       calorieGoal: _calorieGoal,
-      goalReminders: _goalReminders,
-      morningReminder: _morningReminder,
-      eveningReminder: _eveningReminder,
-      vibrationFeedback: _vibrationFeedback,
     );
   }
 
@@ -120,6 +107,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _calorieGoal = profile.calorieGoal ?? kDefaultCalorieGoal;
       }
       _takeSnapshot();
+    });
+  }
+
+  Future<void> _loadNotificationPrefs() async {
+    final reminders = await GoalNotificationsService.remindersEnabled();
+    final completed = await GoalNotificationsService.completedEnabled();
+    if (!mounted) return;
+    setState(() {
+      _goalReminders = reminders;
+      _goalCompletedEnabled = completed;
     });
   }
 
@@ -230,15 +227,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: NotificationSettingsWidget(
                   goalReminders: _goalReminders,
-                  morningReminder: _morningReminder,
-                  eveningReminder: _eveningReminder,
-                  vibrationFeedback: _vibrationFeedback,
-                  onGoalRemindersChanged: (v) =>
-                      setState(() => _goalReminders = v),
-                  onMorningChanged: (v) => setState(() => _morningReminder = v),
-                  onEveningChanged: (v) => setState(() => _eveningReminder = v),
-                  onVibrationChanged: (v) =>
-                      setState(() => _vibrationFeedback = v),
+                  vibrationFeedback: _goalCompletedEnabled,
+                  onGoalRemindersChanged: (v) {
+                    setState(() => _goalReminders = v);
+                    GoalNotificationsService.setRemindersEnabled(v);
+                  },
+                  onVibrationChanged: (v) {
+                    setState(() => _goalCompletedEnabled = v);
+                    GoalNotificationsService.setCompletedEnabled(v);
+                  },
                 ),
               ),
             ),
@@ -564,9 +561,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Saves only Goals (Units/Notifications have no backend field to persist
-  /// to yet - a pre-existing gap, unchanged by this phase). Profile is no
-  /// longer touched here at all - it's self-contained in
+  /// Saves only Goals - the two Notification toggles persist immediately on
+  /// tap instead (see their onChanged callbacks), same as Appearance, and
+  /// Profile is no longer touched here at all - it's self-contained in
   /// ProfileSettingsWidget with its own inline Save. Every field left null
   /// below is left untouched server-side, per ProfileService's partial-
   /// update convention.
@@ -879,18 +876,10 @@ class _GoalsSnapshot {
   final int stepGoal;
   final int activeTimeGoal;
   final int calorieGoal;
-  final bool goalReminders;
-  final bool morningReminder;
-  final bool eveningReminder;
-  final bool vibrationFeedback;
 
   const _GoalsSnapshot({
     required this.stepGoal,
     required this.activeTimeGoal,
     required this.calorieGoal,
-    required this.goalReminders,
-    required this.morningReminder,
-    required this.eveningReminder,
-    required this.vibrationFeedback,
   });
 }

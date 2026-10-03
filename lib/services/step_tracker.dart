@@ -169,6 +169,15 @@ class StepTracker {
   Stream<int> get todaySteps => _controller.stream;
   Stream<int> get todayActiveMinutes => _activeMinutesController.stream;
 
+  /// The token this tracker captured in [start] - exposed so other code
+  /// sharing its isolate (e.g. `background_step_service.dart`'s goal-check,
+  /// which needs to fetch the signed-in user's goals/profile) can reuse the
+  /// exact same pinned session instead of independently reading whatever
+  /// token happens to be ambiently stored, for the same reason [start]'s
+  /// class doc gives for capturing it in the first place. Null until [start]
+  /// has run.
+  String? get authToken => _authToken;
+
   /// Today's steps/active minutes bucketed by hour-of-day (0-23; hours with
   /// no activity yet are simply absent). Not a stream - both maps are only
   /// ever read at moments [todaySteps]/[todayActiveMinutes] already trigger a

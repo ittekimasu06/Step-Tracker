@@ -292,24 +292,18 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     };
   }
 
-  /// Sums [ActivityEstimator.activityCalories] per-hour across every hour
-  /// present in either map, rather than calling it once on whole-day totals
-  /// - see [_buildDayData]'s doc for why.
+  /// See [_buildDayData]'s doc for why this sums per-hour rather than calling
+  /// [ActivityEstimator.activityCalories] once on whole-day totals.
   int _sumHourlyActivityCalories(
     Map<int, int> steps,
     Map<int, int> activeMinutes,
   ) {
-    var total = 0.0;
-    final hours = <int>{...steps.keys, ...activeMinutes.keys};
-    for (final h in hours) {
-      total += ActivityEstimator.activityCalories(
-        steps: steps[h] ?? 0,
-        activeMinutes: activeMinutes[h] ?? 0,
-        weightKg: _profile?.weightKg,
-        heightCm: _profile?.heightCm,
-      );
-    }
-    return total.round();
+    return ActivityEstimator.sumHourlyActivityCalories(
+      steps,
+      activeMinutes,
+      weightKg: _profile?.weightKg,
+      heightCm: _profile?.heightCm,
+    );
   }
 
   /// Fetches and caches a non-today date's real entry from the backend, if

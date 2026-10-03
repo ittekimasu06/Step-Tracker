@@ -188,4 +188,30 @@ class ActivityEstimator {
   /// class pure/stateless and testable like its other methods.
   static double elapsedDayFraction(DateTime now) =>
       (now.hour * 3600 + now.minute * 60 + now.second) / 86400;
+
+  /// Sums [activityCalories] per-hour across every hour present in either
+  /// map, rather than calling it once on whole-day totals - mixing a day's
+  /// scattered/incidental steps into the cadence for one unrelated sustained
+  /// bout can imply a nonsensical pace for that bout (see [activityCalories]'s
+  /// doc). Shared by the dashboard's calorie display and the background
+  /// service's goal-threshold checks (see [GoalNotificationsService]), so
+  /// both always agree on exactly the same "calories so far today" number.
+  static int sumHourlyActivityCalories(
+    Map<int, int> steps,
+    Map<int, int> activeMinutes, {
+    double? weightKg,
+    double? heightCm,
+  }) {
+    var total = 0.0;
+    final hours = <int>{...steps.keys, ...activeMinutes.keys};
+    for (final h in hours) {
+      total += activityCalories(
+        steps: steps[h] ?? 0,
+        activeMinutes: activeMinutes[h] ?? 0,
+        weightKg: weightKg,
+        heightCm: heightCm,
+      );
+    }
+    return total.round();
+  }
 }
