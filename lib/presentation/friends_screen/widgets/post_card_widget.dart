@@ -81,13 +81,19 @@ class PostCardWidget extends StatelessWidget {
                     const TextSpan(text: 'Progress of\n'),
                     TextSpan(
                       text: postDate,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: AppTheme.overlay(context, 13)),
           const SizedBox(height: 14),
           _metricBar(
             context,
@@ -122,7 +128,7 @@ class PostCardWidget extends StatelessWidget {
                   Icon(
                     likedByMe ? Icons.favorite : Icons.favorite_border,
                     size: 18,
-                    color: likedByMe ? AppTheme.caloriesPurple : AppTheme.textSecondary(context),
+                    color: AppTheme.stepsGreen,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -184,13 +190,22 @@ class PostCardWidget extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Text(
-          '$value / $goal',
-          style: TextStyle(
-            fontFamily: 'Manrope',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: color,
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(fontFamily: 'Manrope', fontSize: 12),
+            children: [
+              TextSpan(
+                text: '$value',
+                style: TextStyle(fontWeight: FontWeight.w600, color: color),
+              ),
+              TextSpan(
+                text: ' / $goal',
+                style: TextStyle(
+                  fontWeight: FontWeight.w400,
+                  color: AppTheme.textSecondary(context),
+                ),
+              ),
+            ],
           ),
         ),
       ],
