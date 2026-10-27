@@ -15,6 +15,13 @@ class FriendService {
     return List<Map<String, dynamic>>.from(data['results'] as List? ?? const []);
   }
 
+  /// Connect tab's "Connect with other people" row - a no-query browse list of other users,
+  /// same response shape as [search] (now carrying `username`/`avatarId` too).
+  Future<List<Map<String, dynamic>>> discover() async {
+    final data = await _api.get('/friends/discover');
+    return List<Map<String, dynamic>>.from(data['results'] as List? ?? const []);
+  }
+
   Future<void> sendRequest(String targetUserId) async {
     await _api.post('/friends/requests', data: {'targetUserId': targetUserId});
   }

@@ -4,8 +4,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /**
- * Replaces {@link AnthropicConsultantAiClient} under the {@code test} profile so integration
- * tests never call the real, paid Anthropic API. Lives in test sources but is picked up by
+ * Replaces {@link GeminiConsultantAiClient} under the {@code test} profile so integration
+ * tests never call the real, paid Gemini API. Lives in test sources but is picked up by
  * the same {@code com.steptrack} component scan as any other bean, since the test classpath
  * includes both source roots.
  */

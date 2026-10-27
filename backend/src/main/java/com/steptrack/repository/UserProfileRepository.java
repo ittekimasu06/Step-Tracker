@@ -17,6 +17,9 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, UUID> 
      */
     List<UserProfile> findTop20ByFullNameContainingIgnoreCaseAndIdNot(String query, UUID selfId);
 
+    /** Connect tab's "discover" row - the 20 most recently created profiles besides the caller's. */
+    List<UserProfile> findTop20ByIdNotOrderByCreatedAtDesc(UUID selfId);
+
     boolean existsByUsernameIgnoreCase(String username);
 
     boolean existsByUsernameIgnoreCaseAndIdNot(String username, UUID selfId);

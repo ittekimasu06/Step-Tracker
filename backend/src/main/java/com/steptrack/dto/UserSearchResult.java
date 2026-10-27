@@ -14,6 +14,8 @@ public class UserSearchResult {
 
     private UUID userId;
     private String fullName;
+    private String username;
+    private String avatarId;
 
     /** One of NONE / PENDING_SENT / PENDING_RECEIVED / FRIENDS. */
     private String status;

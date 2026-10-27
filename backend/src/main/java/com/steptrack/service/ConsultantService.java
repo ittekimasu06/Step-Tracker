@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * step history, via {@link ConsultantAiClient}. Deliberately not wrapped in a single
  * {@code @Transactional} - the DB reads below are each their own short-lived transaction
  * (no lazy associations to keep open), so a connection isn't held from the pool for the
- * whole duration of the external Anthropic call.
+ * whole duration of the external Gemini call.
  */
 @Service
 @RequiredArgsConstructor

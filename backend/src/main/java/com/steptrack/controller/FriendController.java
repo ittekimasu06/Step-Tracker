@@ -48,6 +48,20 @@ public class FriendController {
         }
     }
 
+    @GetMapping("/discover")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<?> discover() {
+        try {
+            String email = requireEmail();
+            return ResponseEntity.ok(friendshipService.discover(email));
+        } catch (UnauthorizedException e) {
+            return unauthorized();
+        } catch (Exception e) {
+            logger.error("Error discovering users", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     @PostMapping("/requests")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<?> sendRequest(@Valid @RequestBody FriendRequestCreate request) {

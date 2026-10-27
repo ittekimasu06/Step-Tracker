@@ -4,8 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_client.dart';
 import '../../services/friend_service.dart';
+import '../../services/post_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/avatar_circle.dart';
+import 'widgets/friend_status_action.dart';
+import 'widgets/post_card_widget.dart';
+import 'widgets/user_profile_preview_sheet.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -33,11 +37,19 @@ class _FriendsScreenState extends State<FriendsScreen> {
   bool _searching = false;
   String? _searchError;
 
+  bool _loadingDiscover = true;
+  List<Map<String, dynamic>> _discoverUsers = [];
+
+  bool _loadingFeed = true;
+  List<Map<String, dynamic>> _feedPosts = [];
+
   @override
   void initState() {
     super.initState();
     _loadFriends();
     _loadLeaderboard();
+    _loadDiscover();
+    _loadFeed();
   }
 
   @override
@@ -73,6 +85,67 @@ class _FriendsScreenState extends State<FriendsScreen> {
     } on ApiException {
       if (!mounted) return;
       setState(() => _loadingLeaderboard = false);
+    }
+  }
+
+  Future<void> _loadDiscover() async {
+    setState(() => _loadingDiscover = true);
+    try {
+      final users = await FriendService.instance.discover();
+      if (!mounted) return;
+      setState(() {
+        _discoverUsers = users;
+        _loadingDiscover = false;
+      });
+    } on ApiException {
+      if (!mounted) return;
+      setState(() => _loadingDiscover = false);
+    }
+  }
+
+  Future<void> _loadFeed() async {
+    setState(() => _loadingFeed = true);
+    try {
+      final posts = await PostService.instance.getFeed();
+      if (!mounted) return;
+      setState(() {
+        _feedPosts = posts;
+        _loadingFeed = false;
+      });
+    } on ApiException {
+      if (!mounted) return;
+      setState(() => _loadingFeed = false);
+    }
+  }
+
+  Future<void> _toggleLike(Map<String, dynamic> post) async {
+    final postId = post['id'] as String;
+    final likedByMe = post['likedByMe'] as bool? ?? false;
+    // Optimistic update - a like/unlike should feel instant, and a failure is rare/low-stakes
+    // enough to just revert via a full reload rather than tracking a pending-undo state.
+    setState(() {
+      post['likedByMe'] = !likedByMe;
+      post['likeCount'] = (post['likeCount'] as int? ?? 0) + (likedByMe ? -1 : 1);
+    });
+    try {
+      if (likedByMe) {
+        await PostService.instance.unlikePost(postId);
+      } else {
+        await PostService.instance.likePost(postId);
+      }
+    } on ApiException {
+      if (!mounted) return;
+      await _loadFeed();
+    }
+  }
+
+  Future<void> _sendRequestFromDiscover(String userId) async {
+    try {
+      await FriendService.instance.sendRequest(userId);
+      await Future.wait([_loadDiscover(), _loadFriends()]);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -123,7 +196,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
-            await Future.wait([_loadFriends(), _loadLeaderboard()]);
+            await Future.wait([_loadFriends(), _loadLeaderboard(), _loadDiscover(), _loadFeed()]);
           },
           child: CustomScrollView(
             slivers: [
@@ -240,6 +313,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
 
   Widget _buildSearchResultRow(Map<String, dynamic> result) {
     final status = result['status'] as String;
+    final fullName = result['fullName'] as String? ?? 'Unknown user';
+    final userId = result['userId'] as String;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -250,9 +325,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ),
       child: Row(
         children: [
+          AvatarCircle(avatarId: result['avatarId'] as String?, displayName: fullName, size: 32),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              result['fullName'] as String? ?? 'Unknown user',
+              fullName,
               style: TextStyle(
                 fontFamily: 'Manrope',
                 fontSize: 14,
@@ -261,38 +338,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
               ),
             ),
           ),
-          _buildStatusAction(status, result['userId'] as String),
+          FriendStatusAction(status: status, onSendRequest: () => _sendRequest(userId)),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatusAction(String status, String userId) {
-    switch (status) {
-      case 'FRIENDS':
-        return _pill('Friends', AppTheme.textSecondary(context));
-      case 'PENDING_SENT':
-        return _pill('Requested', AppTheme.textSecondary(context));
-      case 'PENDING_RECEIVED':
-        return _pill('Check Requests', AppTheme.stepsGreen);
-      default:
-        return TextButton(
-          onPressed: () => _sendRequest(userId),
-          child: const Text('Add', style: TextStyle(fontFamily: 'Manrope', fontWeight: FontWeight.w600)),
-        );
-    }
-  }
-
-  Widget _pill(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withAlpha(30),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontFamily: 'Manrope', fontSize: 11, fontWeight: FontWeight.w600, color: color),
       ),
     );
   }
@@ -350,14 +397,98 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _buildConnectTab() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Center(
-        child: Text(
-          'Coming soon.',
-          style: TextStyle(color: AppTheme.textSecondary(context), fontFamily: 'Manrope'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('Connect with other people'),
+        const SizedBox(height: 12),
+        _buildDiscoverRow(),
+        const SizedBox(height: 24),
+        _buildSectionTitle('See what your friends have shared'),
+        const SizedBox(height: 12),
+        _buildFeedList(),
+      ],
+    );
+  }
+
+  Widget _buildSectionTitle(String label) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontFamily: 'Manrope',
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+    );
+  }
+
+  Widget _buildDiscoverRow() {
+    if (_loadingDiscover) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_discoverUsers.isEmpty) {
+      return Text(
+        'No one else here yet.',
+        style: TextStyle(color: AppTheme.textSecondary(context), fontFamily: 'Manrope'),
+      );
+    }
+    return SizedBox(
+      height: 84,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _discoverUsers.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (_, i) => _buildDiscoverAvatar(_discoverUsers[i]),
+      ),
+    );
+  }
+
+  Widget _buildDiscoverAvatar(Map<String, dynamic> user) {
+    final fullName = user['fullName'] as String? ?? 'Unknown user';
+    final userId = user['userId'] as String;
+    return GestureDetector(
+      onTap: () => UserProfilePreviewSheet.show(
+        context,
+        user: user,
+        onSendRequest: () => _sendRequestFromDiscover(userId),
+      ),
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          children: [
+            AvatarCircle(avatarId: user['avatarId'] as String?, displayName: fullName, size: 56),
+            const SizedBox(height: 6),
+            Text(
+              fullName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 11,
+                color: AppTheme.textSecondary(context),
+              ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFeedList() {
+    if (_loadingFeed) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_feedPosts.isEmpty) {
+      return Text(
+        'Nothing shared yet - add friends to see their progress here.',
+        style: TextStyle(color: AppTheme.textSecondary(context), fontFamily: 'Manrope'),
+      );
+    }
+    return Column(
+      children: _feedPosts
+          .map((post) => PostCardWidget(post: post, onToggleLike: () => _toggleLike(post)))
+          .toList(),
     );
   }
 

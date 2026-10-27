@@ -7,10 +7,13 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../services/activity_estimator.dart';
+import '../../services/api_client.dart';
 import '../../services/hourly_step_service.dart';
+import '../../services/post_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/step_service.dart';
 import '../../theme/app_theme.dart';
+import '../friends_screen/widgets/post_card_widget.dart';
 import './widgets/activity_ring_widget.dart';
 import './widgets/date_navigation_widget.dart';
 import './widgets/hourly_chart_section_widget.dart';
@@ -743,6 +746,18 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
             ),
           ),
           const Spacer(),
+          // Only shown for today - a past day's stats are already fixed and
+          // historical, so "share your current progress" doesn't apply to
+          // them (see _shareProgress's doc).
+          if (_isToday(_selectedDate))
+            IconButton(
+              icon: Icon(
+                Icons.ios_share,
+                size: 20,
+                color: AppTheme.textBright(context),
+              ),
+              onPressed: () => _shareProgress(context),
+            ),
           IconButton(
             icon: Icon(
               Icons.calendar_month_outlined,
@@ -754,6 +769,99 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
         ],
       ),
     );
+  }
+
+  /// Posts today's current steps/active-minutes/calories (and goals) as a frozen snapshot to
+  /// the Connect feed - see `Post`'s backend doc for why it's frozen rather than a live
+  /// reference. Previews the exact [PostCardWidget] that will render in a friend's feed
+  /// before actually sharing, built from the same [_todayData] the dashboard itself already
+  /// displays, so the preview and the real post can never visually disagree.
+  Future<void> _shareProgress(BuildContext context) async {
+    final data = _todayData;
+    if (data == null) return;
+
+    final previewPost = <String, dynamic>{
+      'fullName': _profile?.fullName ?? 'You',
+      'avatarId': _profile?.avatarId,
+      'postDate': _formatDate(_selectedDate),
+      'stepCount': data['steps'],
+      'stepGoal': data['stepGoal'],
+      'activeMinutes': data['activeMinutes'],
+      'activeMinutesGoal': data['activeGoal'],
+      'calorieCount': data['activityCalories'],
+      'calorieGoal': data['calorieGoal'],
+      'likeCount': 0,
+      'likedByMe': false,
+    };
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 20, 16, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Share your progress?',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(ctx).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Your friends will see today's stats exactly as they are right now - "
+              "it won't update if you walk more later.",
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 12,
+                color: AppTheme.textSecondary(ctx),
+              ),
+            ),
+            const SizedBox(height: 16),
+            PostCardWidget(post: previewPost),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Cancel', style: TextStyle(fontFamily: 'Manrope')),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Share', style: TextStyle(fontFamily: 'Manrope')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await PostService.instance.createPost(calorieCount: data['activityCalories'] as int);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shared to your friends!')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Widget _buildPhoneLayout(Map<String, dynamic> data) {

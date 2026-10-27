@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Drives the /consultant/advice endpoint through the real servlet container, same approach
  * as {@link StepsFlowIntegrationTest}. Uses {@link StubConsultantAiClient} (active under the
- * "test" profile) instead of the real Anthropic API - see that class's Javadoc.
+ * "test" profile) instead of the real Gemini API - see that class's Javadoc.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

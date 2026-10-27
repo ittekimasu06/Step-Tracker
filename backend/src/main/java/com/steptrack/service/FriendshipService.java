@@ -67,13 +67,35 @@ public class FriendshipService {
                 userProfileRepository.findTop20ByFullNameContainingIgnoreCaseAndIdNot(query.trim(), selfId);
 
         List<UserSearchResult> results = matches.stream()
-                .map(profile -> UserSearchResult.builder()
-                        .userId(profile.getId())
-                        .fullName(profile.getFullName())
-                        .status(relationshipStatus(selfId, profile.getId()))
-                        .build())
+                .map(profile -> toSearchResult(selfId, profile))
                 .collect(Collectors.toList());
         return UserSearchListResponse.builder().results(results).build();
+    }
+
+    /**
+     * The Connect tab's "Connect with other people" row - a simple, no-query browse list so
+     * there's something to discover without already knowing a name to search for. Ordered by
+     * most-recently-created profile; no popularity/activity signal exists yet at this app's
+     * scale, same reasoning as {@code MIN_QUERY_LENGTH}-gated search above for why this is
+     * capped rather than returning the whole user base.
+     */
+    public UserSearchListResponse discover(String email) {
+        UUID selfId = requireUser(email).getId();
+        List<UserProfile> candidates = userProfileRepository.findTop20ByIdNotOrderByCreatedAtDesc(selfId);
+        List<UserSearchResult> results = candidates.stream()
+                .map(profile -> toSearchResult(selfId, profile))
+                .collect(Collectors.toList());
+        return UserSearchListResponse.builder().results(results).build();
+    }
+
+    private UserSearchResult toSearchResult(UUID selfId, UserProfile profile) {
+        return UserSearchResult.builder()
+                .userId(profile.getId())
+                .fullName(profile.getFullName())
+                .username(profile.getUsername())
+                .avatarId(profile.getAvatarId())
+                .status(relationshipStatus(selfId, profile.getId()))
+                .build();
     }
 
     private String relationshipStatus(UUID selfId, UUID otherId) {

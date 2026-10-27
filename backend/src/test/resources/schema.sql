@@ -1,5 +1,7 @@
 -- Mirrors the production PostgreSQL schema so Hibernate's `validate` catches any
 -- drift between the JPA entities and the real database.
+DROP TABLE IF EXISTS post_likes;
+DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS friendships;
 DROP TABLE IF EXISTS hourly_steps;
 DROP TABLE IF EXISTS daily_steps;
@@ -73,3 +75,28 @@ CREATE TABLE friendships (
 
 CREATE INDEX idx_friendship_requester ON friendships(requester_id);
 CREATE INDEX idx_friendship_addressee ON friendships(addressee_id);
+
+CREATE TABLE posts (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id),
+  post_date DATE NOT NULL,
+  step_count INTEGER NOT NULL,
+  step_goal INTEGER NOT NULL,
+  active_minutes INTEGER NOT NULL,
+  active_minutes_goal INTEGER NOT NULL,
+  calorie_count INTEGER NOT NULL,
+  calorie_goal INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_posts_user ON posts(user_id);
+
+CREATE TABLE post_likes (
+  id UUID PRIMARY KEY,
+  post_id UUID NOT NULL REFERENCES posts(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_post_like UNIQUE (post_id, user_id)
+);
+
+CREATE INDEX idx_post_likes_post ON post_likes(post_id);
