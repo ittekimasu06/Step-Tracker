@@ -20,6 +20,7 @@ class UserProfilePreviewSheet extends StatelessWidget {
   }) {
     return showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

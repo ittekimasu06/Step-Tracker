@@ -27,12 +27,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   bool _isSaving = false;
   String? _errorMessage;
 
+  // Email registration already collects + saves a username (see
+  // RegisterScreen/AuthProvider.signUpWithEmail) - asking for it again here
+  // forced every email user to type it twice. Google sign-in never collects
+  // one though, so this screen still needs to ask for it in that case. The
+  // only way to tell which situation this session is in is to check whether
+  // a username is already saved on the profile this screen is about to fill
+  // in the rest of.
+  bool _usernameAlreadySet = false;
+  bool _loadingProfile = true;
+
   final List<String> _genderOptions = [
     'Male',
     'Female',
     'Non-binary',
     'Prefer not to say',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingProfile();
+  }
 
   @override
   void dispose() {
@@ -42,6 +58,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     _weightController.dispose();
     _heightController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadExistingProfile() async {
+    final profile = await ProfileService.instance.fetchProfile();
+    if (!mounted) return;
+    final username = profile?.username;
+    setState(() {
+      _usernameAlreadySet = username != null && username.isNotEmpty;
+      _loadingProfile = false;
+    });
   }
 
   Future<void> _saveProfile() async {
@@ -55,7 +81,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final profile = UserProfile(
       id: '',
       email: '',
-      username: _usernameController.text.trim(),
+      // Already saved at registration for an email account - leaving this
+      // null here means ProfileService's partial-update convention leaves
+      // it untouched server-side rather than re-sending the same value.
+      username: _usernameAlreadySet ? null : _usernameController.text.trim(),
       fullName: _nameController.text.trim(),
       age: int.tryParse(_ageController.text.trim()),
       weightKg: double.tryParse(_weightController.text.trim()),
@@ -83,6 +112,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingProfile) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -162,24 +194,26 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               return null;
             },
           ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _usernameController,
-            label: 'Username',
-            hint: 'e.g. alex_j',
-            keyboardType: TextInputType.text,
-            validator: (v) {
-              final value = v?.trim() ?? '';
-              if (value.isEmpty) return 'Username is required';
-              if (value.length < 3 || value.length > 50) {
-                return 'Must be 3-50 characters';
-              }
-              if (!_usernamePattern.hasMatch(value)) {
-                return 'Letters, numbers, and underscores only';
-              }
-              return null;
-            },
-          ),
+          if (!_usernameAlreadySet) ...[
+            const SizedBox(height: 16),
+            _buildTextField(
+              controller: _usernameController,
+              label: 'Username',
+              hint: 'e.g. alex_j',
+              keyboardType: TextInputType.text,
+              validator: (v) {
+                final value = v?.trim() ?? '';
+                if (value.isEmpty) return 'Username is required';
+                if (value.length < 3 || value.length > 50) {
+                  return 'Must be 3-50 characters';
+                }
+                if (!_usernamePattern.hasMatch(value)) {
+                  return 'Letters, numbers, and underscores only';
+                }
+                return null;
+              },
+            ),
+          ],
           const SizedBox(height: 16),
           _buildGenderSelector(),
           const SizedBox(height: 16),

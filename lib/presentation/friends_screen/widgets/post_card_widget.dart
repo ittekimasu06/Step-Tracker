@@ -11,7 +11,17 @@ class PostCardWidget extends StatelessWidget {
   final Map<String, dynamic> post;
   final VoidCallback? onToggleLike;
 
-  const PostCardWidget({required this.post, this.onToggleLike, super.key});
+  /// False for the dashboard's share-confirmation preview - a like count that
+  /// doesn't exist yet (the post hasn't been created) has nothing meaningful
+  /// to show.
+  final bool showLikeAction;
+
+  const PostCardWidget({
+    required this.post,
+    this.onToggleLike,
+    this.showLikeAction = true,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -59,13 +69,21 @@ class PostCardWidget extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                'Progress of\n$postDate',
+              RichText(
                 textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 10,
-                  color: AppTheme.textSecondary(context),
+                text: TextSpan(
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 10,
+                    color: AppTheme.textSecondary(context),
+                  ),
+                  children: [
+                    const TextSpan(text: 'Progress of\n'),
+                    TextSpan(
+                      text: postDate,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -94,30 +112,32 @@ class PostCardWidget extends StatelessWidget {
             value: post['calorieCount'] as int? ?? 0,
             goal: post['calorieGoal'] as int? ?? 1,
           ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: onToggleLike,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Icon(
-                  likedByMe ? Icons.favorite : Icons.favorite_border,
-                  size: 18,
-                  color: likedByMe ? AppTheme.caloriesPurple : AppTheme.textSecondary(context),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '$likeCount',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textSecondary(context),
+          if (showLikeAction) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: onToggleLike,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  Icon(
+                    likedByMe ? Icons.favorite : Icons.favorite_border,
+                    size: 18,
+                    color: likedByMe ? AppTheme.caloriesPurple : AppTheme.textSecondary(context),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    '$likeCount',
+                    style: TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary(context),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

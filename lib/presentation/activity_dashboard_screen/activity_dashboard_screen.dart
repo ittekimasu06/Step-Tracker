@@ -796,6 +796,7 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
 
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -826,7 +827,7 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
               ),
             ),
             const SizedBox(height: 16),
-            PostCardWidget(post: previewPost),
+            PostCardWidget(post: previewPost, showLikeAction: false),
             const SizedBox(height: 8),
             Row(
               children: [
