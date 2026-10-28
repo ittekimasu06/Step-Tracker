@@ -51,6 +51,16 @@ public class User {
     @Column(name = "verification_code_expires_at")
     private LocalDateTime verificationCodeExpiresAt;
 
+    /**
+     * The new address a signed-in user has requested to change to, awaiting OTP confirmation
+     * (see {@code AuthService.requestEmailChange}/{@code confirmEmailChange}) - reuses {@link
+     * #verificationCode}/{@link #verificationCodeExpiresAt} for the code itself rather than
+     * adding more columns, since registration-verification and email-change are mutually
+     * exclusive per account. Null except mid-flow.
+     */
+    @Column(name = "pending_email")
+    private String pendingEmail;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

@@ -17,13 +17,23 @@ import java.util.concurrent.ConcurrentHashMap;
 public class StubEmailService implements EmailService {
 
     private static final Map<String, String> lastCodeByEmail = new ConcurrentHashMap<>();
+    private static final Map<String, String> lastChangeNoticeNewEmailByOldEmail = new ConcurrentHashMap<>();
 
     public static String lastCodeFor(String email) {
         return lastCodeByEmail.get(email);
     }
 
+    public static String lastChangeNoticeFor(String oldEmail) {
+        return lastChangeNoticeNewEmailByOldEmail.get(oldEmail);
+    }
+
     @Override
     public void sendVerificationCode(String toEmail, String code) {
         lastCodeByEmail.put(toEmail, code);
+    }
+
+    @Override
+    public void sendEmailChangedNotice(String toOldEmail, String newEmail) {
+        lastChangeNoticeNewEmailByOldEmail.put(toOldEmail, newEmail);
     }
 }

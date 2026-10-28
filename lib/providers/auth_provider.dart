@@ -31,9 +31,16 @@ class AuthProvider extends ChangeNotifier {
   // successful verifyEmail.
   String? _pendingVerificationEmail;
 
+  // Set by [requestEmailChange] on success, purely so ChangeEmailScreen's confirm step can
+  // display "Code sent to {email}" - unrelated to [_pendingVerificationEmail] above, which
+  // exists to survive the router's pre-auth redirect (see app_routes.dart's isAuthRoute
+  // check); this flow only ever runs while already authenticated, so it doesn't need that.
+  String? _pendingNewEmail;
+
   bool get isAuthenticated => _isAuthenticated;
   bool get profileCompleted => _profileCompleted;
   String? get pendingVerificationEmail => _pendingVerificationEmail;
+  String? get pendingNewEmail => _pendingNewEmail;
 
   /// True once the stored-session check on startup has finished. The router
   /// uses this to hold on a splash state rather than flashing the login
@@ -194,6 +201,58 @@ class AuthProvider extends ChangeNotifier {
     _setError(null);
     try {
       await _authService.resendVerificationCode(email);
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> requestEmailChange({
+    required String currentPassword,
+    required String newEmail,
+  }) async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _authService.requestEmailChange(
+        currentPassword: currentPassword,
+        newEmail: newEmail,
+      );
+      _pendingNewEmail = newEmail;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> confirmEmailChange(String code) async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _authService.confirmEmailChange(code);
+      _pendingNewEmail = null;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> resendEmailChangeCode() async {
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _authService.resendEmailChangeCode();
       return true;
     } on ApiException catch (e) {
       _setError(e.message);

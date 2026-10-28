@@ -117,18 +117,34 @@ public class AuthService {
                 .build();
         userProfileRepository.save(profile);
 
-        issueAndSendVerificationCode(user);
+        issueAndSendVerificationCode(user, user.getEmail());
 
         logger.info("New user registered: {}", request.getEmail());
     }
 
-    /** Generates a fresh code, persists it with a new expiry, and emails it. */
-    private void issueAndSendVerificationCode(User user) {
+    /**
+     * Generates a fresh code, persists it with a new expiry, and emails it to [targetEmail] -
+     * not always {@code user.getEmail()}: email-change confirmation (see {@link
+     * #requestEmailChange}) sends it to the pending new address instead, while the code itself
+     * still lives on the same row.
+     */
+    private void issueAndSendVerificationCode(User user, String targetEmail) {
         String code = String.format("%06d", RANDOM.nextInt(1_000_000));
         user.setVerificationCode(code);
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(VERIFICATION_CODE_TTL_MINUTES));
         userRepository.save(user);
-        emailService.sendVerificationCode(user.getEmail(), code);
+        emailService.sendVerificationCode(targetEmail, code);
+    }
+
+    /** Throws if [user]'s stored code doesn't match [code] or has expired. */
+    private void validateVerificationCode(User user, String code) {
+        if (user.getVerificationCode() == null || !user.getVerificationCode().equals(code)) {
+            throw new IllegalArgumentException("Incorrect verification code");
+        }
+        if (user.getVerificationCodeExpiresAt() == null
+                || user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Verification code has expired - request a new one");
+        }
     }
 
     /**
@@ -184,14 +200,7 @@ public class AuthService {
             // than erroring, is harmless and matches what the user is actually trying to do.
             return jwtProvider.generateToken(email);
         }
-        if (user.getVerificationCode() == null
-                || !user.getVerificationCode().equals(code)) {
-            throw new IllegalArgumentException("Incorrect verification code");
-        }
-        if (user.getVerificationCodeExpiresAt() == null
-                || user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Verification code has expired - request a new one");
-        }
+        validateVerificationCode(user, code);
 
         user.setEmailVerified(true);
         user.setVerificationCode(null);
@@ -215,9 +224,94 @@ public class AuthService {
             throw new IllegalArgumentException("Please wait a moment before requesting another code");
         }
 
-        issueAndSendVerificationCode(user);
+        issueAndSendVerificationCode(user, user.getEmail());
         lastResendAt.put(email, Instant.now());
         logger.info("Verification code resent to: {}", email);
+    }
+
+    /**
+     * Starts an email change for the signed-in user at [currentEmail]: verifies
+     * [currentPassword] (a hijacked session must not be able to silently take over the
+     * account's identity), rejects a no-op or already-taken [newEmail], then sends an OTP to
+     * [newEmail] - the change only takes effect once {@link #confirmEmailChange} succeeds.
+     */
+    @Transactional
+    public void requestEmailChange(String currentEmail, String currentPassword, String newEmail) {
+        User user = userRepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            logger.warn("Email change request failed: incorrect password for {}", currentEmail);
+            throw new BadCredentialsException("Incorrect password");
+        }
+        if (newEmail.equalsIgnoreCase(currentEmail)) {
+            throw new IllegalArgumentException("New email must be different from your current one");
+        }
+        if (userRepository.existsByEmailIgnoreCase(newEmail)) {
+            throw new IllegalArgumentException("Email already in use");
+        }
+
+        user.setPendingEmail(newEmail);
+        issueAndSendVerificationCode(user, newEmail);
+        logger.info("Email change requested for {}: pending {}", currentEmail, newEmail);
+    }
+
+    /**
+     * Completes an email change started by {@link #requestEmailChange}: on success, [User]'s
+     * {@code email} becomes the previously-pending address, and - since the JWT subject is the
+     * email itself (see {@code JwtProvider}) - a fresh token is returned for the caller to swap
+     * in, the same way {@link #verifyEmail} already does for the registration flow.
+     */
+    @Transactional
+    public String confirmEmailChange(String currentEmail, String code) {
+        User user = userRepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        String pendingEmail = user.getPendingEmail();
+        if (pendingEmail == null) {
+            throw new IllegalArgumentException("No pending email change");
+        }
+        validateVerificationCode(user, code);
+        // Re-checked here too: closes the race where a second account targeted the same new
+        // address after this one's request but confirms first.
+        if (userRepository.existsByEmailIgnoreCase(pendingEmail)) {
+            throw new IllegalArgumentException("Email already in use");
+        }
+
+        user.setEmail(pendingEmail);
+        user.setPendingEmail(null);
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiresAt(null);
+        userRepository.save(user);
+
+        try {
+            emailService.sendEmailChangedNotice(currentEmail, pendingEmail);
+        } catch (Exception e) {
+            // Best-effort - the email change itself already succeeded and committed above, so
+            // a failed notice-send must never undo it.
+            logger.warn("Failed to send email-changed notice to {}: {}", currentEmail, e.getMessage());
+        }
+
+        logger.info("Email changed from {} to {}", currentEmail, pendingEmail);
+        return jwtProvider.generateToken(pendingEmail);
+    }
+
+    @Transactional
+    public void resendEmailChangeCode(String currentEmail) {
+        User user = userRepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (user.getPendingEmail() == null) {
+            throw new IllegalArgumentException("No pending email change");
+        }
+
+        Instant last = lastResendAt.get(currentEmail);
+        if (last != null && last.plusSeconds(RESEND_COOLDOWN_SECONDS).isAfter(Instant.now())) {
+            throw new IllegalArgumentException("Please wait a moment before requesting another code");
+        }
+
+        issueAndSendVerificationCode(user, user.getPendingEmail());
+        lastResendAt.put(currentEmail, Instant.now());
+        logger.info("Email change code resent for: {}", currentEmail);
     }
 
     public String loginWithGoogle(String email) {

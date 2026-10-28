@@ -16,6 +16,7 @@ import '../../services/goal_notifications_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/settings_dirty_state.dart';
 import '../../theme/app_theme.dart';
+import './widgets/account_settings_widget.dart';
 import './widgets/appearance_settings_widget.dart';
 import './widgets/goal_settings_widget.dart';
 import './widgets/notification_settings_widget.dart';
@@ -197,6 +198,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: ProfileSettingsWidget(),
+              ),
+            ),
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: AccountSettingsWidget(),
               ),
             ),
             SliverToBoxAdapter(

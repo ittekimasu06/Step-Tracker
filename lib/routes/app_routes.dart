@@ -9,6 +9,7 @@ import '../presentation/auth/login_screen.dart';
 import '../presentation/auth/register_screen.dart';
 import '../presentation/auth/profile_setup_screen.dart';
 import '../presentation/auth/verify_email_screen.dart';
+import '../presentation/auth/change_email_screen.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/app_scaffold.dart';
 
@@ -17,6 +18,7 @@ class AppRoutes {
   static const String loginScreen = '/login';
   static const String registerScreen = '/register';
   static const String verifyEmailScreen = '/verify-email-screen';
+  static const String changeEmailScreen = '/change-email-screen';
   static const String profileSetupScreen = '/profile-setup';
   static const String activityDashboardScreen = '/activity-dashboard-screen';
   static const String consultantScreen = '/consultant-screen';
@@ -65,6 +67,10 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.profileSetupScreen,
         builder: (context, state) => const ProfileSetupScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.changeEmailScreen,
+        builder: (context, state) => const ChangeEmailScreen(),
       ),
       GoRoute(
         path: AppRoutes.friendRequestsScreen,

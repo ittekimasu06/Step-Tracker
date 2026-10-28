@@ -63,6 +63,29 @@ class AuthService {
     await _api.post('/auth/resend-verification', data: {'email': email});
   }
 
+  Future<void> requestEmailChange({
+    required String currentPassword,
+    required String newEmail,
+  }) async {
+    await _api.post(
+      '/profile/email/change',
+      data: {'currentPassword': currentPassword, 'newEmail': newEmail},
+    );
+  }
+
+  /// On success, swaps in the freshly returned token - the old one's subject (the old email)
+  /// stops authenticating anything the moment the change commits server-side.
+  Future<String> confirmEmailChange(String code) async {
+    final data = await _api.post('/profile/email/confirm', data: {'code': code});
+    final token = data['token'] as String;
+    await _api.saveToken(token);
+    return token;
+  }
+
+  Future<void> resendEmailChangeCode() async {
+    await _api.post('/profile/email/resend');
+  }
+
   Future<String> signInWithEmail({
     required String email,
     required String password,

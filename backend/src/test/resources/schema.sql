@@ -15,6 +15,7 @@ CREATE TABLE users (
   email_verified BOOLEAN NOT NULL DEFAULT TRUE,
   verification_code VARCHAR(6),
   verification_code_expires_at TIMESTAMP,
+  pending_email VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

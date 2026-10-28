@@ -52,4 +52,22 @@ public class SesEmailService implements EmailService {
                 .build();
         client.sendEmail(request);
     }
+
+    @Override
+    public void sendEmailChangedNotice(String toOldEmail, String newEmail) {
+        SendEmailRequest request = SendEmailRequest.builder()
+                .source(fromAddress)
+                .destination(Destination.builder().toAddresses(toOldEmail).build())
+                .message(Message.builder()
+                        .subject(Content.builder().data("Your Steptrack account email was changed").build())
+                        .body(Body.builder()
+                                .text(Content.builder()
+                                        .data("Your Steptrack account email was changed to " + newEmail
+                                                + ".\n\nIf you didn't make this change, contact support immediately.")
+                                        .build())
+                                .build())
+                        .build())
+                .build();
+        client.sendEmail(request);
+    }
 }

@@ -7,4 +7,7 @@ package com.steptrack.service;
  */
 public interface EmailService {
     void sendVerificationCode(String toEmail, String code);
+
+    /** Best-effort notice sent to the OLD address once an email change completes. */
+    void sendEmailChangedNotice(String toOldEmail, String newEmail);
 }
