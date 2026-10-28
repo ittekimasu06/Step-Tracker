@@ -90,6 +90,122 @@ class GoalSettingsWidget extends StatelessWidget {
   }
 }
 
+class _GoalEditDialog extends StatefulWidget {
+  final String label;
+  final int initialValue;
+  final int min;
+  final int max;
+  final String unit;
+  final Color color;
+
+  const _GoalEditDialog({
+    required this.label,
+    required this.initialValue,
+    required this.min,
+    required this.max,
+    required this.unit,
+    required this.color,
+  });
+
+  @override
+  State<_GoalEditDialog> createState() => _GoalEditDialogState();
+}
+
+class _GoalEditDialogState extends State<_GoalEditDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue.toString());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final parsed = int.tryParse(_controller.text);
+    Navigator.of(context).pop(parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        widget.label,
+        style: TextStyle(
+          fontFamily: 'Manrope',
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.textBright(context),
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: widget.color,
+            ),
+            decoration: InputDecoration(
+              suffixText: widget.unit,
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: widget.color, width: 2),
+              ),
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Range: ${widget.min} - ${widget.max} ${widget.unit}',
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 11,
+              color: AppTheme.textSecondary(context),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary(context),
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: Text(
+            'Save',
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontWeight: FontWeight.w600,
+              color: widget.color,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _GoalSliderRow extends StatelessWidget {
   final String label;
   final double value;
@@ -113,6 +229,25 @@ class _GoalSliderRow extends StatelessWidget {
     required this.onChanged,
   });
 
+  Future<void> _showEditDialog(BuildContext context) async {
+    final result = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return _GoalEditDialog(
+          label: label,
+          initialValue: value.round(),
+          min: min.toInt(),
+          max: max.toInt(),
+          unit: unit,
+          color: color,
+        );
+      },
+    );
+    if (result == null) return;
+    final clamped = result.clamp(min.toInt(), max.toInt());
+    onChanged(clamped.toDouble());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -130,28 +265,38 @@ class _GoalSliderRow extends StatelessWidget {
                 color: AppTheme.textBright(context),
               ),
             ),
-            Row(
-              children: [
-                Text(
-                  displayValue,
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
+            InkWell(
+              onTap: () => _showEditDialog(context),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  unit,
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 11,
-                    color: AppTheme.textSecondary(context),
-                  ),
+                child: Row(
+                  children: [
+                    Text(
+                      displayValue,
+                      style: TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      unit,
+                      style: TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 11,
+                        color: AppTheme.textSecondary(context),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ],
         ),

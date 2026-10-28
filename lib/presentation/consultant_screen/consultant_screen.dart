@@ -106,7 +106,7 @@ class _ConsultantScreenState extends State<ConsultantScreen> {
             onPressed: _isLoading ? null : _getAdvice,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.stepsGreen,
-              foregroundColor: Colors.black,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -118,7 +118,7 @@ class _ConsultantScreenState extends State<ConsultantScreen> {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.black,
+                      color: Colors.white,
                     ),
                   )
                 : const Text(
