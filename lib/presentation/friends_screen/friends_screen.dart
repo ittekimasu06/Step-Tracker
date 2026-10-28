@@ -18,7 +18,7 @@ class FriendsScreen extends StatefulWidget {
   State<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen> {
+class _FriendsScreenState extends State<FriendsScreen> with WidgetsBindingObserver {
   static const _minQueryLength = 3;
 
   // 0 = Connect, 1 = Leaderboard, 2 = Friends - Friends stays the default
@@ -33,9 +33,19 @@ class _FriendsScreenState extends State<FriendsScreen> {
   List<Map<String, dynamic>> _leaderboard = [];
 
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   List<Map<String, dynamic>>? _searchResults;
   bool _searching = false;
   String? _searchError;
+
+  // Tracks the keyboard's last-known open/closed state (inferred from
+  // viewInsets.bottom - see didChangeMetrics) so the search field's focus
+  // can be dropped the moment the keyboard closes by any means other than
+  // tapping outside it (system back button, swipe-down-to-dismiss) - Flutter
+  // doesn't close a TextField's logical focus just because the on-screen
+  // keyboard hid, so without this the field is left showing its focused
+  // (blue-bordered, blinking-cursor) state with no keyboard visible.
+  bool _keyboardWasVisible = false;
 
   bool _loadingDiscover = true;
   List<Map<String, dynamic>> _discoverUsers = [];
@@ -46,14 +56,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadFriends();
     _loadLeaderboard();
     _loadDiscover();
     _loadFeed();
   }
 
+  /// Fires on every screen-metrics change, including the keyboard opening/
+  /// closing (it resizes the view) - see [_keyboardWasVisible]'s doc for why
+  /// this is the only reliable way to notice a keyboard dismissed by means
+  /// other than tapping outside the field.
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final keyboardVisible = view.viewInsets.bottom > 0;
+    if (_keyboardWasVisible && !keyboardVisible && _searchFocusNode.hasFocus) {
+      _searchFocusNode.unfocus();
+    }
+    _keyboardWasVisible = keyboardVisible;
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchFocusNode.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -192,22 +220,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await Future.wait([_loadFriends(), _loadLeaderboard(), _loadDiscover(), _loadFeed()]);
-          },
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _buildHeader()),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                  child: _buildBody(),
+      body: GestureDetector(
+        // Tapping anywhere that isn't the search field itself (or another
+        // focusable control) dismisses the keyboard and drops the field's
+        // focus - translucent so it doesn't swallow taps meant for buttons/
+        // list rows underneath, it just also runs this before them.
+        behavior: HitTestBehavior.translucent,
+        onTap: () => _searchFocusNode.unfocus(),
+        child: SafeArea(
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([_loadFriends(), _loadLeaderboard(), _loadDiscover(), _loadFeed()]);
+            },
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(child: _buildHeader()),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                    child: _buildBody(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -270,6 +306,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Widget _buildSearchField() {
     return TextField(
       controller: _searchController,
+      focusNode: _searchFocusNode,
       onChanged: _onSearchChanged,
       style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
       decoration: InputDecoration(
