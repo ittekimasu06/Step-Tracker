@@ -88,6 +88,13 @@
             <version>2.6.0</version>
         </dependency>
 
+        <!-- AWS SES (email verification) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>ses</artifactId>
+            <version>2.28.11</version>
+        </dependency>
+
         <!-- Lombok (for reducing boilerplate) -->
         <dependency>
             <groupId>org.projectlombok</groupId>

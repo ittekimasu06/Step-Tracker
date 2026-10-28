@@ -16,18 +16,31 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final long VERIFICATION_CODE_TTL_MINUTES = 15;
+    private static final long RESEND_COOLDOWN_SECONDS = 60;
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
+    private final EmailService emailService;
+
+    // Same cooldown-map shape as ConsultantService - keyed by email (not a UUID; a resend
+    // request can arrive for an email whose User row exists but isn't verified yet, which is
+    // the only state this throttle actually needs to cover).
+    private final Map<String, Instant> lastResendAt = new ConcurrentHashMap<>();
 
     // Self-injected (lazily, to avoid a circular-eager-init error) so
     // createUserInNewTransaction's @Transactional(REQUIRES_NEW) actually goes
@@ -43,16 +56,23 @@ public class AuthService {
             UserProfileRepository userProfileRepository,
             PasswordEncoder passwordEncoder,
             JwtProvider jwtProvider,
+            EmailService emailService,
             @Lazy AuthService self) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
+        this.emailService = emailService;
         this.self = self;
     }
 
+    /**
+     * Unlike before email verification existed, this no longer returns a usable session - the
+     * account isn't ready to be logged into until {@link #verifyEmail} succeeds. The caller
+     * (AuthController) responds with {@code requiresVerification: true} and no token.
+     */
     @Transactional
-    public String register(RegisterRequest request) {
+    public void register(RegisterRequest request) {
         // Validate passwords match
         if (!request.getPassword().equals(request.getPasswordConfirm())) {
             logger.warn("Registration failed: passwords do not match for {}", request.getEmail());
@@ -97,10 +117,18 @@ public class AuthService {
                 .build();
         userProfileRepository.save(profile);
 
-        logger.info("New user registered: {}", request.getEmail());
+        issueAndSendVerificationCode(user);
 
-        // Generate JWT token
-        return jwtProvider.generateToken(user.getEmail());
+        logger.info("New user registered: {}", request.getEmail());
+    }
+
+    /** Generates a fresh code, persists it with a new expiry, and emails it. */
+    private void issueAndSendVerificationCode(User user) {
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        user.setVerificationCode(code);
+        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(VERIFICATION_CODE_TTL_MINUTES));
+        userRepository.save(user);
+        emailService.sendVerificationCode(user.getEmail(), code);
     }
 
     /**
@@ -116,6 +144,9 @@ public class AuthService {
                 .id(UUID.randomUUID())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
+                // Overrides the entity's fail-open default (see User.emailVerified's doc) -
+                // this is the one path that actually needs the false-until-proven state.
+                .emailVerified(false)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -134,8 +165,59 @@ public class AuthService {
             throw new BadCredentialsException("Invalid email or password");
         }
 
+        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            logger.warn("Login failed: email not verified {}", request.getEmail());
+            throw new EmailNotVerifiedException("Please verify your email before signing in");
+        }
+
         logger.info("User logged in: {}", request.getEmail());
         return jwtProvider.generateToken(user.getEmail());
+    }
+
+    @Transactional
+    public String verifyEmail(String email, String code) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            // Already verified (e.g. a stale/reused tab) - completing login again here, rather
+            // than erroring, is harmless and matches what the user is actually trying to do.
+            return jwtProvider.generateToken(email);
+        }
+        if (user.getVerificationCode() == null
+                || !user.getVerificationCode().equals(code)) {
+            throw new IllegalArgumentException("Incorrect verification code");
+        }
+        if (user.getVerificationCodeExpiresAt() == null
+                || user.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Verification code has expired - request a new one");
+        }
+
+        user.setEmailVerified(true);
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiresAt(null);
+        userRepository.save(user);
+
+        logger.info("Email verified for: {}", email);
+        return jwtProvider.generateToken(email);
+    }
+
+    @Transactional
+    public void resendVerificationCode(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new IllegalArgumentException("This account is already verified");
+        }
+
+        Instant last = lastResendAt.get(email);
+        if (last != null && last.plusSeconds(RESEND_COOLDOWN_SECONDS).isAfter(Instant.now())) {
+            throw new IllegalArgumentException("Please wait a moment before requesting another code");
+        }
+
+        issueAndSendVerificationCode(user);
+        lastResendAt.put(email, Instant.now());
+        logger.info("Verification code resent to: {}", email);
     }
 
     public String loginWithGoogle(String email) {
@@ -147,6 +229,8 @@ public class AuthService {
                             .id(UUID.randomUUID())
                             .email(email)
                             .passwordHash("") // Google auth doesn't use password
+                            // Google already verified this address - no OTP step needed here.
+                            .emailVerified(true)
                             .createdAt(LocalDateTime.now())
                             .updatedAt(LocalDateTime.now())
                             .build();

@@ -42,7 +42,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       password: _passwordController.text,
     );
     if (success && mounted) {
-      context.go(AppRoutes.profileSetupScreen);
+      // A true return now means "code sent", not "logged in" - see
+      // AuthProvider.signUpWithEmail's doc.
+      context.go(AppRoutes.verifyEmailScreen);
     }
   }
 

@@ -8,6 +8,7 @@ import '../presentation/settings_screen/settings_screen.dart';
 import '../presentation/auth/login_screen.dart';
 import '../presentation/auth/register_screen.dart';
 import '../presentation/auth/profile_setup_screen.dart';
+import '../presentation/auth/verify_email_screen.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/app_scaffold.dart';
 
@@ -15,6 +16,7 @@ class AppRoutes {
   static const String initial = '/login';
   static const String loginScreen = '/login';
   static const String registerScreen = '/register';
+  static const String verifyEmailScreen = '/verify-email-screen';
   static const String profileSetupScreen = '/profile-setup';
   static const String activityDashboardScreen = '/activity-dashboard-screen';
   static const String consultantScreen = '/consultant-screen';
@@ -34,7 +36,8 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
       final isAuthenticated = authProvider.isAuthenticated;
       final isAuthRoute =
           state.matchedLocation == AppRoutes.loginScreen ||
-          state.matchedLocation == AppRoutes.registerScreen;
+          state.matchedLocation == AppRoutes.registerScreen ||
+          state.matchedLocation == AppRoutes.verifyEmailScreen;
 
       if (!isAuthenticated && !isAuthRoute) {
         return AppRoutes.loginScreen;
@@ -54,6 +57,10 @@ GoRouter buildAppRouter(AuthProvider authProvider) {
       GoRoute(
         path: AppRoutes.registerScreen,
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmailScreen,
+        builder: (context, state) => const VerifyEmailScreen(),
       ),
       GoRoute(
         path: AppRoutes.profileSetupScreen,

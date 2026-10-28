@@ -7,6 +7,7 @@ import com.steptrack.dto.HourlyStepsListResponse;
 import com.steptrack.dto.HourlyStepsUpdateRequest;
 import com.steptrack.dto.RegisterRequest;
 import com.steptrack.service.StepService;
+import com.steptrack.service.StubEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,14 +53,19 @@ class HourlyStepsFlowIntegrationTest {
         return new HttpEntity<>(headers);
     }
 
+    // Registering alone no longer returns a usable token - see StepsFlowIntegrationTest's
+    // identical helper for why this also drives the verify-email step.
     private String registerAndGetToken() {
         String email = uniqueEmail();
-        ResponseEntity<AuthResponse> response = rest.postForEntity("/auth/register",
+        rest.postForEntity("/auth/register",
                 RegisterRequest.builder()
                         .email(email).username(uniqueUsername())
                         .password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
-        return response.getBody().getToken();
+        String code = StubEmailService.lastCodeFor(email);
+        ResponseEntity<AuthResponse> verified = rest.postForEntity("/auth/verify-email",
+                java.util.Map.of("email", email, "code", code), AuthResponse.class);
+        return verified.getBody().getToken();
     }
 
     private static HourlyStepsUpdateRequest oneHour(int hour, int steps, int activeMinutes) {

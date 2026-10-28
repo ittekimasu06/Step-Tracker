@@ -4,6 +4,7 @@ import com.steptrack.dto.AuthResponse;
 import com.steptrack.dto.RegisterRequest;
 import com.steptrack.dto.StepEntryRequest;
 import com.steptrack.dto.StepEntryResponse;
+import com.steptrack.service.StubEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,14 +46,20 @@ class StepsFlowIntegrationTest {
         return new HttpEntity<>(headers);
     }
 
+    // Registering alone no longer returns a usable token - every caller of this helper wants a
+    // logged-in user, so it also drives the email-verification step (reading the code back from
+    // StubEmailService, same as a real user would read it from their inbox) before returning.
     private String registerAndGetToken() {
         String email = uniqueEmail();
-        ResponseEntity<AuthResponse> response = rest.postForEntity("/auth/register",
+        rest.postForEntity("/auth/register",
                 RegisterRequest.builder()
                         .email(email).username(uniqueUsername())
                         .password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
-        return response.getBody().getToken();
+        String code = StubEmailService.lastCodeFor(email);
+        ResponseEntity<AuthResponse> verified = rest.postForEntity("/auth/verify-email",
+                java.util.Map.of("email", email, "code", code), AuthResponse.class);
+        return verified.getBody().getToken();
     }
 
     @Test

@@ -35,6 +35,11 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (success && mounted) {
       _routeAfterSignIn(auth);
+    } else if (auth.pendingVerificationEmail != null && mounted) {
+      // The password was correct but the account isn't verified yet (HTTP
+      // 403 - see AuthProvider.signInWithEmail) - send them to finish that
+      // instead of leaving them stuck on a generic error.
+      context.go(AppRoutes.verifyEmailScreen);
     }
   }
 

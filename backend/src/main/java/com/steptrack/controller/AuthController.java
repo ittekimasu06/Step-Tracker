@@ -4,8 +4,11 @@ import com.steptrack.dto.AuthResponse;
 import com.steptrack.dto.GoogleAuthRequest;
 import com.steptrack.dto.LoginRequest;
 import com.steptrack.dto.RegisterRequest;
+import com.steptrack.dto.ResendVerificationRequest;
+import com.steptrack.dto.VerifyEmailRequest;
 import com.steptrack.security.GoogleTokenVerifier;
 import com.steptrack.service.AuthService;
+import com.steptrack.service.EmailNotVerifiedException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -28,13 +31,13 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         try {
-            String token = authService.register(request);
-            logger.info("User registered successfully: {}", request.getEmail());
+            authService.register(request);
+            logger.info("User registered, pending verification: {}", request.getEmail());
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(AuthResponse.builder()
-                            .token(token)
                             .email(request.getEmail())
-                            .message("Registration successful")
+                            .message("Verification code sent to your email")
+                            .requiresVerification(true)
                             .build());
         } catch (IllegalArgumentException e) {
             logger.warn("Registration failed: {}", e.getMessage());
@@ -67,11 +70,68 @@ public class AuthController {
                     .body(AuthResponse.builder()
                             .message("Invalid credentials")
                             .build());
+        } catch (EmailNotVerifiedException e) {
+            logger.warn("Login blocked, email not verified: {}", request.getEmail());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(AuthResponse.builder()
+                            .email(request.getEmail())
+                            .message(e.getMessage())
+                            .requiresVerification(true)
+                            .build());
         } catch (Exception e) {
             logger.error("Unexpected error during login", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(AuthResponse.builder()
                             .message("Login failed")
+                            .build());
+        }
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<AuthResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        try {
+            String token = authService.verifyEmail(request.getEmail(), request.getCode());
+            logger.info("Email verified: {}", request.getEmail());
+            return ResponseEntity.ok(AuthResponse.builder()
+                    .token(token)
+                    .email(request.getEmail())
+                    .message("Email verified")
+                    .build());
+        } catch (IllegalArgumentException e) {
+            logger.warn("Email verification failed for {}: {}", request.getEmail(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(AuthResponse.builder()
+                            .message(e.getMessage())
+                            .build());
+        } catch (Exception e) {
+            logger.error("Unexpected error during email verification", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(AuthResponse.builder()
+                            .message("Verification failed")
+                            .build());
+        }
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<AuthResponse> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        try {
+            authService.resendVerificationCode(request.getEmail());
+            return ResponseEntity.ok(AuthResponse.builder()
+                    .email(request.getEmail())
+                    .message("Verification code resent")
+                    .requiresVerification(true)
+                    .build());
+        } catch (IllegalArgumentException e) {
+            logger.warn("Resend verification failed for {}: {}", request.getEmail(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(AuthResponse.builder()
+                            .message(e.getMessage())
+                            .build());
+        } catch (Exception e) {
+            logger.error("Unexpected error during resend verification", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(AuthResponse.builder()
+                            .message("Could not resend code")
                             .build());
         }
     }

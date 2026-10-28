@@ -30,12 +30,15 @@ class AuthService {
     return true;
   }
 
-  Future<String> registerWithEmail({
+  /// Does *not* sign the user in - the account isn't usable until [verifyEmail]
+  /// succeeds (the backend no longer returns a token here at all), unlike
+  /// every other method on this class.
+  Future<void> registerWithEmail({
     required String email,
     required String username,
     required String password,
   }) async {
-    final data = await _api.post(
+    await _api.post(
       '/auth/register',
       data: {
         'email': email,
@@ -44,9 +47,20 @@ class AuthService {
         'passwordConfirm': password,
       },
     );
+  }
+
+  Future<String> verifyEmail({required String email, required String code}) async {
+    final data = await _api.post(
+      '/auth/verify-email',
+      data: {'email': email, 'code': code},
+    );
     final token = data['token'] as String;
     await _api.saveToken(token);
     return token;
+  }
+
+  Future<void> resendVerificationCode(String email) async {
+    await _api.post('/auth/resend-verification', data: {'email': email});
   }
 
   Future<String> signInWithEmail({

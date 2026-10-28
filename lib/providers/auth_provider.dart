@@ -24,8 +24,16 @@ class AuthProvider extends ChangeNotifier {
   // separate post-await navigation call could ever run.
   bool _profileCompleted = true;
 
+  // Set after a register call or a login call rejected specifically for an
+  // unverified email (HTTP 403 - see AuthService.signInWithEmail's caller
+  // below) - the UI checks this to decide whether to route to
+  // VerifyEmailScreen instead of just showing an inline error. Cleared on a
+  // successful verifyEmail.
+  String? _pendingVerificationEmail;
+
   bool get isAuthenticated => _isAuthenticated;
   bool get profileCompleted => _profileCompleted;
+  String? get pendingVerificationEmail => _pendingVerificationEmail;
 
   /// True once the stored-session check on startup has finished. The router
   /// uses this to hold on a splash state rather than flashing the login
@@ -89,6 +97,9 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Does *not* sign the user in on success - see AuthService.registerWithEmail's
+  /// doc. A true return means "the code was sent, go to VerifyEmailScreen"
+  /// (check [pendingVerificationEmail]), not "you're logged in now".
   Future<bool> signUpWithEmail({
     required String email,
     required String username,
@@ -102,9 +113,7 @@ class AuthProvider extends ChangeNotifier {
         username: username,
         password: password,
       );
-      _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
-      await _resumeBackgroundTrackingIfPermitted();
-      _isAuthenticated = true;
+      _pendingVerificationEmail = email;
       notifyListeners();
       return true;
     } on ApiException catch (e) {
@@ -132,10 +141,62 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } on ApiException catch (e) {
+      // 403 is only ever returned by /auth/login for one reason - see
+      // AuthController.login's EmailNotVerifiedException branch - so the
+      // status code alone is enough to route to VerifyEmailScreen instead
+      // of just showing e.message as a dead-end error.
+      if (e.statusCode == 403) {
+        _pendingVerificationEmail = email;
+      }
       _setError(e.message);
       return false;
     } catch (e) {
       _setError('An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// Completes the login that [signUpWithEmail]/a 403 [signInWithEmail] left
+  /// pending.
+  Future<bool> verifyEmail(String code) async {
+    final email = _pendingVerificationEmail;
+    if (email == null) {
+      _setError('Nothing to verify.');
+      return false;
+    }
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _authService.verifyEmail(email: email, code: code);
+      _pendingVerificationEmail = null;
+      _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
+      await _resumeBackgroundTrackingIfPermitted();
+      _isAuthenticated = true;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
+      return false;
+    } catch (e) {
+      _setError('An unexpected error occurred. Please try again.');
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<bool> resendVerificationCode() async {
+    final email = _pendingVerificationEmail;
+    if (email == null) return false;
+    _setLoading(true);
+    _setError(null);
+    try {
+      await _authService.resendVerificationCode(email);
+      return true;
+    } on ApiException catch (e) {
+      _setError(e.message);
       return false;
     } finally {
       _setLoading(false);

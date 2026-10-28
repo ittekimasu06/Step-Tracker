@@ -5,6 +5,7 @@ import com.steptrack.dto.LoginRequest;
 import com.steptrack.dto.RegisterRequest;
 import com.steptrack.dto.UserProfileRequest;
 import com.steptrack.dto.UserProfileResponse;
+import com.steptrack.service.StubEmailService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +48,23 @@ class AuthFlowIntegrationTest {
         return new HttpEntity<>(headers);
     }
 
+    /**
+     * Registers, then immediately drives the verify-email step (reading the code back from
+     * {@link StubEmailService} the same way a real user would read it from their inbox), and
+     * returns the resulting, now-usable token - registering alone no longer returns one.
+     */
+    private String registerAndVerify(String email, String username) {
+        rest.postForEntity("/auth/register",
+                RegisterRequest.builder()
+                        .email(email).username(username)
+                        .password("secret123").passwordConfirm("secret123").build(),
+                AuthResponse.class);
+        String code = StubEmailService.lastCodeFor(email);
+        ResponseEntity<AuthResponse> verified = rest.postForEntity("/auth/verify-email",
+                java.util.Map.of("email", email, "code", code), AuthResponse.class);
+        return verified.getBody().getToken();
+    }
+
     @Test
     void healthEndpointIsPublic() {
         ResponseEntity<String> response = rest.getForEntity("/health", String.class);
@@ -56,7 +74,7 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
-    void registerReturnsTokenAndIsPublic() {
+    void registerRequiresVerificationAndIsPublic() {
         String email = uniqueEmail();
         RegisterRequest request = RegisterRequest.builder()
                 .email(email)
@@ -70,7 +88,10 @@ class AuthFlowIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getToken()).isNotBlank();
+        // No usable session yet - verifying the email is what issues one (see
+        // EmailVerificationFlowIntegrationTest).
+        assertThat(response.getBody().getToken()).isNull();
+        assertThat(response.getBody().isRequiresVerification()).isTrue();
         assertThat(response.getBody().getEmail()).isEqualTo(email);
     }
 
@@ -109,9 +130,7 @@ class AuthFlowIntegrationTest {
     @Test
     void loginSucceedsWithCorrectPasswordAndFailsWithWrongOne() {
         String email = uniqueEmail();
-        rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class);
+        registerAndVerify(email, uniqueUsername());
 
         ResponseEntity<AuthResponse> ok = rest.postForEntity("/auth/login",
                 LoginRequest.builder().email(email).password("secret123").build(),
@@ -139,11 +158,7 @@ class AuthFlowIntegrationTest {
     @Test
     void profileCanBeUpdatedAndReadBackWithToken() {
         String email = uniqueEmail();
-        ResponseEntity<AuthResponse> registered = rest.postForEntity("/auth/register",
-                RegisterRequest.builder()
-                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class);
-        String token = registered.getBody().getToken();
+        String token = registerAndVerify(email, uniqueUsername());
 
         // A freshly registered user has a profile that is not yet completed.
         ResponseEntity<UserProfileResponse> initial = rest.exchange(
@@ -189,10 +204,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void unsetGoalsDefaultToNullNotZero() {
-        String email = uniqueEmail();
-        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String token = registerAndVerify(uniqueEmail(), uniqueUsername());
 
         ResponseEntity<UserProfileResponse> response = rest.exchange(
                 "/profile", HttpMethod.GET, bearer(token), UserProfileResponse.class);
@@ -204,10 +216,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void goalsCanBeUpdatedIndependentlyOfProfileFields() {
-        String email = uniqueEmail();
-        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String token = registerAndVerify(uniqueEmail(), uniqueUsername());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -225,15 +234,10 @@ class AuthFlowIntegrationTest {
 
     @Test
     void oneUsersTokenNeverExposesAnotherUsersProfile() {
-        String emailA = uniqueEmail();
-        String tokenA = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(emailA).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String tokenA = registerAndVerify(uniqueEmail(), uniqueUsername());
 
         String emailB = uniqueEmail();
-        String tokenB = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(emailB).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String tokenB = registerAndVerify(emailB, uniqueUsername());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(tokenA);
@@ -251,9 +255,7 @@ class AuthFlowIntegrationTest {
     @Test
     void deletedAccountCanNoLongerAuthenticateEvenWithItsOldToken() {
         String email = uniqueEmail();
-        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                .email(email).username(uniqueUsername()).password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String token = registerAndVerify(email, uniqueUsername());
 
         ResponseEntity<Void> deleted = rest.exchange(
                 "/profile", HttpMethod.DELETE, bearer(token), Void.class);
@@ -306,10 +308,7 @@ class AuthFlowIntegrationTest {
     @Test
     void registeredUsernameIsReturnedOnProfile() {
         String username = uniqueUsername();
-        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(uniqueEmail()).username(username)
-                        .password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String token = registerAndVerify(uniqueEmail(), username);
 
         ResponseEntity<UserProfileResponse> profile = rest.exchange(
                 "/profile", HttpMethod.GET, bearer(token), UserProfileResponse.class);
@@ -324,10 +323,7 @@ class AuthFlowIntegrationTest {
                         .password("secret123").passwordConfirm("secret123").build(),
                 AuthResponse.class);
 
-        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(uniqueEmail()).username(uniqueUsername())
-                        .password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String token = registerAndVerify(uniqueEmail(), uniqueUsername());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
@@ -341,10 +337,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void descriptionAndAvatarIdRoundTripCorrectly() {
-        String token = rest.postForEntity("/auth/register", RegisterRequest.builder()
-                        .email(uniqueEmail()).username(uniqueUsername())
-                        .password("secret123").passwordConfirm("secret123").build(),
-                AuthResponse.class).getBody().getToken();
+        String token = registerAndVerify(uniqueEmail(), uniqueUsername());
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
