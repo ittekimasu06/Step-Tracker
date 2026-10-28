@@ -24,6 +24,14 @@ class AuthProvider extends ChangeNotifier {
   // separate post-await navigation call could ever run.
   bool _profileCompleted = true;
 
+  // The signed-in user's email, kept here (rather than re-fetched by whichever widget wants
+  // to show it) because AccountSettingsWidget lives inside the StatefulShellRoute's
+  // IndexedStack - it's never disposed/recreated when navigation returns to Settings (via
+  // push/pop OR go()), so a self-fetch on initState alone would go stale after
+  // confirmEmailChange. Watching this field instead makes it update the moment the change
+  // commits, regardless of how the user gets back to Settings.
+  String? _currentEmail;
+
   // Set after a register call or a login call rejected specifically for an
   // unverified email (HTTP 403 - see AuthService.signInWithEmail's caller
   // below) - the UI checks this to decide whether to route to
@@ -38,6 +46,7 @@ class AuthProvider extends ChangeNotifier {
   String? _pendingNewEmail;
 
   bool get isAuthenticated => _isAuthenticated;
+  String? get currentEmail => _currentEmail;
   bool get profileCompleted => _profileCompleted;
   String? get pendingVerificationEmail => _pendingVerificationEmail;
   String? get pendingNewEmail => _pendingNewEmail;
@@ -76,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
     final hasSession = await _authService.hasValidStoredSession();
     if (hasSession) {
       _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
+      _currentEmail = await _authService.currentUserEmail();
       await _resumeBackgroundTrackingIfPermitted();
     }
     _isAuthenticated = hasSession;
@@ -86,6 +96,7 @@ class AuthProvider extends ChangeNotifier {
   void _handleUnauthorized() {
     if (!_isAuthenticated) return;
     _isAuthenticated = false;
+    _currentEmail = null;
     notifyListeners();
   }
 
@@ -143,6 +154,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authService.signInWithEmail(email: email, password: password);
       _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
+      _currentEmail = email;
       await _resumeBackgroundTrackingIfPermitted();
       _isAuthenticated = true;
       notifyListeners();
@@ -179,6 +191,7 @@ class AuthProvider extends ChangeNotifier {
       await _authService.verifyEmail(email: email, code: code);
       _pendingVerificationEmail = null;
       _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
+      _currentEmail = email;
       await _resumeBackgroundTrackingIfPermitted();
       _isAuthenticated = true;
       notifyListeners();
@@ -236,7 +249,8 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     _setError(null);
     try {
-      await _authService.confirmEmailChange(code);
+      final token = await _authService.confirmEmailChange(code);
+      _currentEmail = _authService.emailFromToken(token);
       _pendingNewEmail = null;
       notifyListeners();
       return true;
@@ -268,6 +282,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authService.signInWithGoogle();
       _profileCompleted = await ProfileService.instance.shouldSkipProfileSetup();
+      _currentEmail = await _authService.currentUserEmail();
       await _resumeBackgroundTrackingIfPermitted();
       _isAuthenticated = true;
       notifyListeners();
@@ -290,6 +305,7 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signOut();
       _stopBackgroundTracking();
       _isAuthenticated = false;
+      _currentEmail = null;
       notifyListeners();
     } catch (e) {
       _setError('Sign out failed. Please try again.');
@@ -311,6 +327,7 @@ class AuthProvider extends ChangeNotifier {
       await _authService.deleteAccount();
       _stopBackgroundTracking();
       _isAuthenticated = false;
+      _currentEmail = null;
       notifyListeners();
       return true;
     } on ApiException catch (e) {

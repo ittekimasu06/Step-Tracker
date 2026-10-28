@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
+import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -71,8 +72,13 @@ class _ChangeEmailScreenState extends State<ChangeEmailScreen> {
     final auth = context.read<AuthProvider>();
     final success = await auth.confirmEmailChange(_codeController.text.trim());
     if (success && mounted) {
-      context.pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      // go() (not pop()) so this always lands cleanly on Settings regardless of how many
+      // pages are on the stack - a plain pop() here could race with the redirect that
+      // AuthProvider's notifyListeners (fired moments earlier, still on this route) triggers,
+      // leaving a stray duplicate of this screen on top instead of returning to Settings.
+      final messenger = ScaffoldMessenger.of(context);
+      context.go(AppRoutes.settingsScreen);
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             'Email changed successfully',

@@ -1,44 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
+import '../../../providers/auth_provider.dart';
 import '../../../routes/app_routes.dart';
-import '../../../services/auth_service.dart';
 import '../../../theme/app_theme.dart';
 
-/// Self-contained, same self-fetching pattern as ProfileSettingsWidget - reads the signed-in
-/// user's email itself (via the JWT's `sub` claim, same as the background service's
-/// accountKey) rather than depending on a parent-provided value.
-class AccountSettingsWidget extends StatefulWidget {
+/// Reads the signed-in user's email from [AuthProvider] rather than self-fetching it (unlike
+/// ProfileSettingsWidget) - this widget lives inside the StatefulShellRoute's IndexedStack, so
+/// it's never disposed/recreated when the user navigates to ChangeEmailScreen and back
+/// (whether via pop or go()); a self-fetch on initState alone would keep showing the address
+/// from whenever this widget first mounted. Watching the provider instead picks up the new
+/// address the moment ChangeEmailScreen's confirm step commits it.
+class AccountSettingsWidget extends StatelessWidget {
   const AccountSettingsWidget({super.key});
 
-  @override
-  State<AccountSettingsWidget> createState() => _AccountSettingsWidgetState();
-}
-
-class _AccountSettingsWidgetState extends State<AccountSettingsWidget> {
-  String? _email;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEmail();
-  }
-
-  Future<void> _loadEmail() async {
-    final email = await AuthService.instance.currentUserEmail();
-    if (!mounted) return;
-    setState(() => _email = email);
-  }
-
-  Future<void> _openChangeEmail() async {
-    await context.push(AppRoutes.changeEmailScreen);
-    // The screen swaps in a fresh token on a successful change - re-read so this row
-    // reflects the new address immediately on return.
-    _loadEmail();
+  Future<void> _openChangeEmail(BuildContext context) {
+    return context.push(AppRoutes.changeEmailScreen);
   }
 
   @override
   Widget build(BuildContext context) {
+    final email = context.watch<AuthProvider>().currentEmail;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -61,7 +44,7 @@ class _AccountSettingsWidgetState extends State<AccountSettingsWidget> {
           ),
           const SizedBox(height: 12),
           InkWell(
-            onTap: _openChangeEmail,
+            onTap: () => _openChangeEmail(context),
             borderRadius: BorderRadius.circular(10),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -95,7 +78,7 @@ class _AccountSettingsWidgetState extends State<AccountSettingsWidget> {
                           ),
                         ),
                         Text(
-                          _email ?? 'Loading...',
+                          email ?? 'Loading...',
                           style: TextStyle(
                             fontFamily: 'Manrope',
                             fontSize: 11,
