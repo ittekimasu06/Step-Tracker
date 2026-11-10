@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 import 'activity_estimator.dart';
@@ -28,6 +29,10 @@ import 'step_tracker.dart';
 /// anything itself (`autoStart: true` only takes effect once a permission
 /// grant elsewhere calls `startService()`).
 Future<void> initializeStepTrackingService() async {
+  // `flutter_background_service` has no web implementation - calling
+  // `.configure()` there throws (MissingPluginException) before the first
+  // frame even renders, since this runs at the very top of `main()`.
+  if (kIsWeb) return;
   final service = FlutterBackgroundService();
   await service.configure(
     androidConfiguration: AndroidConfiguration(

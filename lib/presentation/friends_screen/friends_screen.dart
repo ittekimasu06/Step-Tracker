@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -219,6 +220,39 @@ class _FriendsScreenState extends State<FriendsScreen> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
+    final content = SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        child: _buildBody(),
+      ),
+    );
+    final refresh = RefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([_loadFriends(), _loadLeaderboard(), _loadDiscover(), _loadFeed()]);
+      },
+      // Web only - the header stays a full-bleed row outside the scroll view
+      // (SliverConstrainedCrossAxis only caps a sliver's width, it doesn't
+      // center it - a separate Column is what actually centers the capped
+      // body), while mobile keeps its original single-CustomScrollView layout
+      // with the header as its first sliver, untouched.
+      child: kIsWeb
+          ? Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1040),
+                      child: CustomScrollView(slivers: [content]),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : CustomScrollView(
+              slivers: [SliverToBoxAdapter(child: _buildHeader()), content],
+            ),
+    );
     return Scaffold(
       body: GestureDetector(
         // Tapping anywhere that isn't the search field itself (or another
@@ -227,25 +261,7 @@ class _FriendsScreenState extends State<FriendsScreen> with WidgetsBindingObserv
         // list rows underneath, it just also runs this before them.
         behavior: HitTestBehavior.translucent,
         onTap: () => _searchFocusNode.unfocus(),
-        child: SafeArea(
-          bottom: false,
-          child: RefreshIndicator(
-            onRefresh: () async {
-              await Future.wait([_loadFriends(), _loadLeaderboard(), _loadDiscover(), _loadFeed()]);
-            },
-            child: CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: _buildHeader()),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                    child: _buildBody(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        child: SafeArea(bottom: false, child: refresh),
       ),
     );
   }

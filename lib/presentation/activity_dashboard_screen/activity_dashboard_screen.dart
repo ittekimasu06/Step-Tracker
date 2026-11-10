@@ -69,27 +69,35 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _activitySubscription =
-        FlutterBackgroundService().on('activityUpdate').listen((event) {
-      if (!mounted || event == null) return;
-      _hasLiveUpdate = true;
-      setState(() {
-        _todaySteps = event['steps'] as int;
-        _todayActiveMinutes = event['activeMinutes'] as int;
-        _hourlySteps = (event['hourlySteps'] as Map).map(
-          (k, v) => MapEntry(int.parse(k as String), v as int),
-        );
-        _hourlyActiveMinutes = (event['hourlyActiveMinutes'] as Map).map(
-          (k, v) => MapEntry(int.parse(k as String), v as int),
-        );
+    // The background tracking service only exists on Android (see
+    // background_step_service.dart's doc) - on web/iOS there's nothing to
+    // subscribe to or start, and FlutterBackgroundService() throws on web if
+    // touched at all. The one-time seed fetches below (StepService/
+    // HourlyStepService, plain HTTP) remain the only source of today's data
+    // on those platforms - read-only, matching the accepted web limitation.
+    if (!kIsWeb && Platform.isAndroid) {
+      _activitySubscription =
+          FlutterBackgroundService().on('activityUpdate').listen((event) {
+        if (!mounted || event == null) return;
+        _hasLiveUpdate = true;
+        setState(() {
+          _todaySteps = event['steps'] as int;
+          _todayActiveMinutes = event['activeMinutes'] as int;
+          _hourlySteps = (event['hourlySteps'] as Map).map(
+            (k, v) => MapEntry(int.parse(k as String), v as int),
+          );
+          _hourlyActiveMinutes = (event['hourlyActiveMinutes'] as Map).map(
+            (k, v) => MapEntry(int.parse(k as String), v as int),
+          );
+        });
       });
-    });
-    _statusSubscription =
-        FlutterBackgroundService().on('trackerStatus').listen((event) {
-      if (!mounted || event == null) return;
-      setState(() => _permissionDenied = event['permissionDenied'] as bool);
-    });
-    _requestPermissionsAndStartTracking();
+      _statusSubscription =
+          FlutterBackgroundService().on('trackerStatus').listen((event) {
+        if (!mounted || event == null) return;
+        setState(() => _permissionDenied = event['permissionDenied'] as bool);
+      });
+      _requestPermissionsAndStartTracking();
+    }
 
     // One-time seed for the very first paint, before any background-service
     // broadcast has arrived - _hasLiveUpdate guards against a slow response
@@ -206,6 +214,7 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
   /// sync and waits for its 'syncComplete' reply, falling back to a short
   /// timeout in case the service isn't running.
   Future<void> _handleRefresh() {
+    if (kIsWeb || !Platform.isAndroid) return Future.value();
     final completer = Completer<void>();
     late final StreamSubscription sub;
     sub = FlutterBackgroundService().on('syncComplete').listen((_) {
@@ -524,14 +533,59 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
     final showPermissionDeniedState =
         _isToday(_selectedDate) && _permissionDenied;
 
+    final contentSlivers = _buildContentSlivers(
+      context: context,
+      data: data,
+      hourlyAvailable: hourlyAvailable,
+      hourlyData: hourlyData,
+      showPermissionDeniedState: showPermissionDeniedState,
+      isTablet: isTablet,
+    );
+    // Web only - the header stays a full-bleed row outside the scroll view
+    // (SliverConstrainedCrossAxis only caps a sliver's width, it doesn't
+    // center it - a separate Column is what actually centers the capped
+    // content), while mobile keeps its original single-CustomScrollView
+    // layout with the header as its first sliver, untouched.
+    final scrollArea = kIsWeb
+        ? Column(
+            children: [
+              _buildHeader(context),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1040),
+                    child: CustomScrollView(slivers: contentSlivers),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(child: _buildHeader(context)),
+              ...contentSlivers,
+            ],
+          );
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
           onRefresh: _handleRefresh,
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: _buildHeader(context)),
+          child: scrollArea,
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildContentSlivers({
+    required BuildContext context,
+    required Map<String, dynamic>? data,
+    required bool hourlyAvailable,
+    required List<Map<String, dynamic>>? hourlyData,
+    required bool showPermissionDeniedState,
+    required bool isTablet,
+  }) {
+    return [
               SliverToBoxAdapter(
                 child: DateNavigationWidget(
                   selectedDate: _selectedDate,
@@ -724,11 +778,7 @@ class _ActivityDashboardScreenState extends State<ActivityDashboardScreen>
                   ),
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
-    );
+    ];
   }
 
   Widget _buildHeader(BuildContext context) {

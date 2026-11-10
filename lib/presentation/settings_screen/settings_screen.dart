@@ -189,74 +189,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       },
       child: Scaffold(
+      // Web only - the header stays a full-bleed row outside the scroll view
+      // (SliverConstrainedCrossAxis only caps a sliver's width, it doesn't
+      // center it - a separate Column is what actually centers the capped
+      // content), while mobile keeps its original single-CustomScrollView
+      // layout with the header as its first sliver, untouched.
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _buildHeader(context)),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: ProfileSettingsWidget(),
+        child: kIsWeb
+            ? Column(
+                children: [
+                  _buildHeader(context),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1040),
+                        child: CustomScrollView(
+                          slivers: _buildContentSlivers(themeProvider),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(child: _buildHeader(context)),
+                  ..._buildContentSlivers(themeProvider),
+                ],
               ),
-            ),
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: AccountSettingsWidget(),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: GoalSettingsWidget(
-                  stepGoal: _stepGoal,
-                  activeTimeGoal: _activeTimeGoal,
-                  calorieGoal: _calorieGoal,
-                  onStepGoalChanged: (v) => setState(() => _stepGoal = v),
-                  onActiveTimeChanged: (v) =>
-                      setState(() => _activeTimeGoal = v),
-                  onCalorieGoalChanged: (v) => setState(() => _calorieGoal = v),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: AppearanceSettingsWidget(
-                  themeMode: themeProvider.themeMode,
-                  onThemeModeChanged: themeProvider.setThemeMode,
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: NotificationSettingsWidget(
-                  goalReminders: _goalReminders,
-                  vibrationFeedback: _goalCompletedEnabled,
-                  onGoalRemindersChanged: (v) {
-                    setState(() => _goalReminders = v);
-                    GoalNotificationsService.setRemindersEnabled(v);
-                  },
-                  onVibrationChanged: (v) {
-                    setState(() => _goalCompletedEnabled = v);
-                    GoalNotificationsService.setCompletedEnabled(v);
-                  },
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                child: _buildDangerZone(context),
-              ),
-            ),
-          ],
-        ),
       ),
       ),
     );
+  }
+
+  List<Widget> _buildContentSlivers(ThemeProvider themeProvider) {
+    return [
+      const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: ProfileSettingsWidget(),
+        ),
+      ),
+      const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: AccountSettingsWidget(),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: GoalSettingsWidget(
+            stepGoal: _stepGoal,
+            activeTimeGoal: _activeTimeGoal,
+            calorieGoal: _calorieGoal,
+            onStepGoalChanged: (v) => setState(() => _stepGoal = v),
+            onActiveTimeChanged: (v) =>
+                setState(() => _activeTimeGoal = v),
+            onCalorieGoalChanged: (v) => setState(() => _calorieGoal = v),
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: AppearanceSettingsWidget(
+            themeMode: themeProvider.themeMode,
+            onThemeModeChanged: themeProvider.setThemeMode,
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: NotificationSettingsWidget(
+            goalReminders: _goalReminders,
+            vibrationFeedback: _goalCompletedEnabled,
+            onGoalRemindersChanged: (v) {
+              setState(() => _goalReminders = v);
+              GoalNotificationsService.setRemindersEnabled(v);
+            },
+            onVibrationChanged: (v) {
+              setState(() => _goalCompletedEnabled = v);
+              GoalNotificationsService.setCompletedEnabled(v);
+            },
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+          child: _buildDangerZone(context),
+        ),
+      ),
+    ];
   }
 
   Widget _buildHeader(BuildContext context) {

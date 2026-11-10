@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../services/api_client.dart';
@@ -40,21 +41,36 @@ class _ConsultantScreenState extends State<ConsultantScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(child: _buildHeader()),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                child: _buildBody(),
-              ),
-            ),
-          ],
-        ),
+    final content = SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        child: _buildBody(),
       ),
+    );
+    // Web only - the header stays a full-bleed row outside the scroll view
+    // (SliverConstrainedCrossAxis only caps a sliver's width, it doesn't
+    // center it - a separate Column is what actually centers the capped
+    // body), while mobile keeps its original single-CustomScrollView layout
+    // with the header as its first sliver, untouched.
+    final body = kIsWeb
+        ? Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1040),
+                    child: CustomScrollView(slivers: [content]),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : CustomScrollView(
+            slivers: [SliverToBoxAdapter(child: _buildHeader()), content],
+          );
+    return Scaffold(
+      body: SafeArea(bottom: false, child: body),
     );
   }
 
