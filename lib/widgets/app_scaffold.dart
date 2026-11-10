@@ -15,20 +15,27 @@ class AppScaffold extends StatelessWidget {
     // e.g. ActivityDashboardScreen._buildContentSlivers), so the body here is
     // left unconstrained. The nav bar gets its own, narrower cap instead -
     // web only, naturally responsive since it's a no-op below its maxWidth.
-    Widget navBar = AppNavigation(navigationShell: navigationShell);
+    final innerNavBar = AppNavigation(navigationShell: navigationShell);
+    Widget navBar = innerNavBar;
     if (kIsWeb) {
-      // Row, not Center/Align - those size themselves to fill all available
-      // space on any loose axis, and Scaffold gives bottomNavigationBar a
-      // very generous height allowance, which blew this up to cover most of
-      // the screen. Row only takes the height its child needs.
+      // AppNavigation's own Container has no explicit width - it only fills
+      // whatever it's given because Scaffold normally hands
+      // bottomNavigationBar *tight* width constraints (exactly the screen
+      // width). A plain Row/Center here gives it *loose* constraints
+      // instead, so it'd just shrink to its own content size. This SizedBox
+      // re-imposes a tight width, capped at 760, so it fills up to that cap
+      // and visibly shrinks below it as the viewport narrows.
+      //
+      // Deliberately MediaQuery's size, not LayoutBuilder's constraints here
+      // - Scaffold hands the bottomNavigationBar slot an *unbounded* max
+      // width (confirmed by this exact bug: every width clamped straight to
+      // 760 regardless of an actually-narrower viewport, clipping it), so
+      // LayoutBuilder's constraints.maxWidth isn't the real viewport width.
+      final viewportWidth = MediaQuery.of(context).size.width;
+      final width = viewportWidth > 760 ? 760.0 : viewportWidth;
       navBar = Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
-            child: navBar,
-          ),
-        ],
+        children: [SizedBox(width: width, child: innerNavBar)],
       );
     }
     return Scaffold(
